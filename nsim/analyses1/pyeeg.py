@@ -158,11 +158,11 @@ def embed_seq(X,Tau,D):
 	N =len(X)
 
 	if D * Tau > N:
-		print "Cannot build such a matrix, because D * Tau > N" 
+		print("Cannot build such a matrix, because D * Tau > N")
 		exit()
 
 	if Tau<1:
-		print "Tau has to be at least 1"
+		print("Tau has to be at least 1")
 		exit()
 
 	Y=zeros((N - (D - 1) * Tau, D))
@@ -803,7 +803,7 @@ def dfa(X, Ave = None, L = None):
 	--------
 	>>> import pyeeg
 	>>> from numpy.random import randn
-	>>> print pyeeg.dfa(randn(4096))
+	>>> print(pyeeg.dfa(randn(4096)))
 	0.490035110345
 
 	Reference
@@ -843,8 +843,9 @@ def dfa(X, Ave = None, L = None):
 	for i in xrange(0,len(L)):
 		n = int(L[i])						# for each box length L[i]
 		if n==0:
-			print "time series is too short while the box length is too big"
-			print "abort"
+			print("time series is too short while the box length"
+                              "is too big")
+			print("abort")
 			exit()
 		for j in xrange(0,len(X),n): # for each box
 			if j+n < len(X):
