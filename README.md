@@ -1,13 +1,13 @@
 nsim
 ====
-Simulate systems from ODEs/SDEs, analyse timeseries.
+Simulate systems from ODEs/SDEs, analyze timeseries.
 
 Overview
 --------
 nsim is for systems in physics, biology and finance that are modelled
 in continuous time with differential equations. nsim makes it easy to
 define and simulate these (including proper treatment of noise in SDEs)
-and to analyse the properties of the resulting timeseries.
+and to analyze the properties of the resulting timeseries.
 
 * Automatic parallel computing / cluster computing: For multiple or repeated
   simulations, nsim distributes these across a cluster (or across the CPUs
@@ -18,7 +18,7 @@ and to analyse the properties of the resulting timeseries.
 * Model parameters can optionally be specified as random distributions, 
   instead of fixed values, to create multiple non-identical simulations.
 
-* nsim provides a `Timeseries` class. This is just a numpy array.
+* nsim provides a `Timeseries` class. This is just a numpy array.  
   But it also allows slicing the array by time instead of by array index,
   and can keep track of channel names (or variable names) of a multivariate 
   time series.
@@ -48,7 +48,7 @@ TODO
 
 * Optionally allow the equations to be specified and integrated in C, for speed
 
-* Write statistical analyses applying to ensembles of repeated SDE simulations
+* Write statistical analyses applying to ensembles of repeated SDE simulations  
   (First will improve the `distob` package to add a DistArray class,
    allowing a single ndarray to be spread across the cluster)
 
