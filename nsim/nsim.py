@@ -33,7 +33,6 @@ from .timeseries import Timeseries, _Timeslice
 from . import sde
 from . import analysesN
 import distob
-from IPython import parallel
 from scipy import stats
 from scipy import integrate
 import numpy as np
@@ -190,6 +189,7 @@ class Simulation(object):
     output = property(fget=__get_output, doc="Simulated model output")
 
 
+# TODO can remove this class after distob proxy methods support block=False
 @distob.proxy_methods(Simulation)
 class RemoteSimulation(distob.Remote, Simulation):
     """Local object representing a remote Simulation"""
@@ -238,27 +238,8 @@ class MultipleSim(object):
         """
         self.T = T
         self.dt = dt
-        self.client = parallel.Client() # use default ipython profile
-        ids = self.client.ids
-        dv = self.client[ids]
-        dv.use_dill()
-        with dv.sync_imports(quiet=True):
-            import nsim
-            from scipy import stats
-        ar = dv.execute('import numpy as np')
-        dv.wait(ar)
-        distob.setup_engines(self.client)
-        def remote_add_sim(system, T, dt):
-            return distob.Ref(Simulation(system, T, dt))
-        refs = []
-        for i in xrange(len(systems)):
-            dv.targets = i % len(ids)
-            refs.append(dv.apply_async(remote_add_sim, systems[i], T, dt))
-        dv.targets = ids
-        dv.wait(refs)
-        self.sims = [RemoteSimulation(refs[i].r, self.client) 
-                     for i in xrange(len(systems))]
-        # start all computations (asynchronously)
+        self.sims = [Simulation(s, T, dt) for s in systems]
+        distob.scatter(self.sims)
         for s in self.sims:
             s.compute()
 
@@ -436,20 +417,8 @@ def quickmodel(f, G, y0, name='NewModel'):
         if G is not None:
             setattr(newclass, 'G',
                     staticmethod(lambda y, t: np.array([[scalarG(y, t)]])))
-    # Make the new class' official name visible in namespace nsim.sim
+    # Make the new class' official name visible in namespace nsim.nsim
     globals()[name] = newclass 
-    #if distob.engine is None:
-    #    distob.setup_engines()
-    #    dv = distob.engine._dv
-    #    with dv.sync_imports(quiet=True):
-    #        from nsim import sim
-    #        from scipy import stats
-    #    ar = dv.execute('import numpy as np')
-    #    dv.wait(ar)
-    #else:
-    #    dv = distob.engine._dv
-    #dv.use_dill()
-    #dv.push({name: newclass})
     return newclass
 
 
