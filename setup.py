@@ -49,7 +49,7 @@ setup(
     author_email='mattja6@gmail.com',
     description='Simulate systems from ODEs or SDEs, analyze timeseries.',
     long_description=read('README.md'),
-    packages=['nsim'],
+    packages=['nsim', 'nsim.analyses1', 'nsim.analysesN', 'nsim.models'],
     platforms='any',
     zip_safe=False,
     classifiers = [

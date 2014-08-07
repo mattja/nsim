@@ -1,6 +1,6 @@
 nsim
 ====
-Simulate systems from ODEs/SDEs, analyze timeseries.
+Simulate systems from ODEs or SDEs, analyze timeseries.
 
 Overview
 --------
@@ -18,8 +18,8 @@ and to analyze the properties of the resulting timeseries.
 * Model parameters can optionally be specified as random distributions, 
   instead of fixed values, to create multiple non-identical simulations.
 
-* nsim provides a `Timeseries` class. This is just a numpy array.  
-  But it also allows slicing the array by time instead of by array index,
+* nsim provides a `Timeseries` class. This is a numpy array.  
+  It allows slicing the array by time instead of by array index, 
   and can keep track of channel names (or variable names) of a multivariate 
   time series.
 
@@ -54,6 +54,6 @@ TODO
 
 Thanks
 ------
-Incorporates extra time series analyses from Forrest Sheng Bao's pyeeg (GPLv3) http://fsbao.net
+Incorporates extra time series analyses from Forrest Sheng Bao's `pyeeg` (GPLv3) http://fsbao.net
 
 `IPython` parallel computing, see: http://ipython.org/ipython-doc/dev/parallel/
