@@ -47,7 +47,7 @@ setup(
     tests_require=['tox'],
     cmdclass = {'test': Tox},
     author_email='mattja6@gmail.com',
-    description='Simulate physical systems from ODEs/SDEs, analyse timeseries',
+    description='Simulate systems from ODEs or SDEs, analyze timeseries.',
     long_description=read('README.md'),
     packages=['nsim'],
     platforms='any',
