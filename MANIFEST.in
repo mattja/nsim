@@ -5,7 +5,7 @@ include README.md
 include tox.ini
 recursive-include nsim *
 recursive-include examples *
-recursive-include doc *
-prune doc/_build
+recursive-include docs *
+prune docs/_build
 prune */__pycache__
 global-exclude *.pyc *.pyo *.pyd *~ *.swp
