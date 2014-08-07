@@ -1,0 +1,11 @@
+include MANIFEST.in
+include *.txt
+include LICENSE
+include README.md
+include tox.ini
+recursive-include nsim *
+recursive-include examples *
+recursive-include doc *
+prune doc/_build
+prune */__pycache__
+global-exclude *.pyc *.pyo *.pyd *~ *.swp
