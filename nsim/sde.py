@@ -60,16 +60,20 @@ def sodeint(f, G, y0, tspan):
         raise SDEValueError('Time steps must be equally spaced.')
     # be flexible to allow scalar equations. convert them to a 1D vector system
     if isinstance(y0, numbers.Number):
+        if isinstance(y0, numbers.Integral):
+            numtype = np.float64
+        else:
+            numtype = type(y0)
         y0_orig = y0
-        y0 = np.array([y0], dtype=np.float64)
+        y0 = np.array([y0], dtype=numtype)
         def make_vector_fn(fn):
             def newfn(y, t):
-                return np.array([fn(y[0], t)], dtype=np.float64)
+                return np.array([fn(y[0], t)], dtype=numtype)
             newfn.__name__ = fn.__name__
             return newfn
         def make_matrix_fn(fn):
             def newfn(y, t):
-                return np.array([[fn(y[0], t)]], dtype=np.float64)
+                return np.array([[fn(y[0], t)]], dtype=numtype)
             newfn.__name__ = fn.__name__
             return newfn
         if isinstance(f(y0_orig, 0.0), numbers.Number):
