@@ -23,12 +23,12 @@ and to analyze the properties of the resulting timeseries.
   and can keep track of channel names (or variable names) of a multivariate 
   time series.
 
-* Besides the usual methods of numpy arrays, the `Timeseries` objects 
+* As well as the usual methods of numpy arrays, the `Timeseries` objects 
   have extra methods for easy filtering, plotting and analysis.
   Analyses can be chained together in a pipeline. This can easily be extended
   with your own analysis functions by calling `Timeseries.add_analyses()`
 
-  Analyses of multiple time series are also distributed on the cluster,
+  Analyses of multiple time series are distributed on the cluster,
   without needing to do any parallel programming.
 
 * Besides simulations, arrays of time series data can be loaded from MATLAB 
@@ -43,8 +43,11 @@ TODO
   multiple CPU cores on each cluster host for simulation of network models,
   splitting degrees of freedom evenly across CPUs).
 
-* Auto-generate multiple simulations covering a region of parameter space,
-  to run in parallel.
+* Auto-generate multiple simulations covering a lattice of points in 
+  parameter space, to run in parallel.
+
+* Directly support SDEs expressed in Ito form. (Currently need to write it
+  in Stratonovich form as an intermediate step before simulating in nsim)
 
 * Optionally allow the equations to be specified and integrated in C, for speed
 
@@ -54,6 +57,6 @@ TODO
 
 Thanks
 ------
-Incorporates extra time series analyses from Forrest Sheng Bao's `pyeeg` (GPLv3) http://fsbao.net
+Incorporates extra time series analyses from Forrest Sheng Bao's `pyeeg` http://fsbao.net
 
 `IPython` parallel computing, see: http://ipython.org/ipython-doc/dev/parallel/

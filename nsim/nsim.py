@@ -24,8 +24,8 @@ Classes:
 
 functions:
 ----------
-``quickmodel()``  Create a new model class dynamically at runtime
-``quicksim()``  Create a new simulation dynamically at runtime
+``newmodel()``  Create a new model class dynamically at runtime
+``newsim()``  Create a new simulation dynamically at runtime
 """
 
 from __future__ import absolute_import
@@ -64,6 +64,7 @@ class SimClusterError(Error):
     '__getitem__', '__setitem__', '__getslice__', '__setslice__'))
 class RemoteTimeseries(distob.RemoteArray, object):
     """Local object representing a Timeseries that may be local or remote"""
+
     def __repr__(self):
         return self._cached_apply('__repr__').replace(
             self._ref.type.__name__, self.__class__.__name__, 1)
@@ -71,6 +72,17 @@ class RemoteTimeseries(distob.RemoteArray, object):
     def plot(self, title=None, show=True):
         self._fetch()
         return self._obcache.plot(title, show)
+
+    def psd(self, plot=True):
+        """Power spectral density
+        Args:
+          plot (bool)
+        """
+        if not plot:
+            return self._cached_apply('psd', plot=False)
+        else:
+            self._fetch()
+            return self._obcache.psd(plot=True)
 
 
 @distob.proxy_methods(_Timeslice, include_underscore=(
@@ -98,9 +110,24 @@ class Model(object):
 
 
 class ODEModel(Model):
-    """Model defined by a system of ordinary differential equations"""
+    """Model defined by a system of ordinary differential equations
+
+    Attributes:
+      dimension (integer): Dimension of the state space
+      output_vars (list of integers): If i is in this list then y[i] is 
+        considered an output variable
+      f(y, t): right hand side of the ODE system dy/dt = f(y, t)
+
+    Instance attributes:
+      y0 (array of shape (ndim,)): Initial state vector
+    """
+    dimension = 1
+    output_vars = [0]
+
     def __init__(self):
         super(ODEModel, self).__init__()
+        if not hasattr(self.__class__, 'y0'):
+            self.y0 = np.zeros(self.__class__.dimension)
 
     def integrate(self, tspan):
         return Timeseries(integrate.odeint(self.f, self.y0, tspan), tspan)
@@ -110,12 +137,15 @@ class ODEModel(Model):
 
 
 class SDEModel(Model):
-    """Model defined by a system of (ordinary) stochastic differential equations
+    """Model defined by system of (ordinary) stochastic differential equations
+    dy = f(y, t) dt + G(y, t) dW  (N.B. currently must be in Stratonovich form)
 
     Attributes:
-      ndim (integer): Dimension of the state space
+      dimension (integer): Dimension of the state space
       output_vars (list of integers): If i is in this list then y[i] is 
         considered an output variable
+      f(y, t): deterministic part of Stratonovich SDE system 
+      G(y, t): noise coefficient matrix of Stratonovich SDE system 
 
     Instance attributes:
       y0 (array of shape (ndim,)): Initial state vector
@@ -332,7 +362,7 @@ class NetworkSim(MultipleSim):
     pass
 
 
-def quicksim(f, G, y0, T=60.0, dt=0.005, repeat=1, identical=True):
+def newsim(f, G, y0, name='NewModel', T=60.0, dt=0.005, repeat=1, identical=True):
     """Make a simulation of the system defined by functions f and G.
 
     dy = f(y,t)dt + G(y,t).dW with initial condition y0
@@ -345,25 +375,26 @@ def quicksim(f, G, y0, T=60.0, dt=0.005, repeat=1, identical=True):
       G: callable(y, t) (defined in global scope) returning (n,m) array
         Optional matrix-valued function to define noise coefficients
       y0 (array):  Initial condition 
+      name (str): Optional class name for the new model
       T: Total length of time to simulate, in seconds.
       dt: Timestep for numerical integration.
       repeat (int, optional)
       identical (bool, optional)
 
     Returns: 
-      sim (sim.Simulation)
+      Simulation
 
     Raises:
       SimValueError, SimTypeError
     """
-    NewModel = quickmodel(f, G, y0, 'NewModel')
+    NewModel = newmodel(f, G, y0, name)
     if repeat == 1:
-        return Simulation(NewModel())
+        return Simulation(NewModel(), T, dt)
     else:
-        return RepeatedSim(NewModel, repeat=repeat, identical=identical)
+        return RepeatedSim(NewModel, T, dt, repeat, identical)
 
 
-def quickmodel(f, G, y0, name='NewModel'):
+def newmodel(f, G, y0, name='NewModel'):
     """Use the functions f and G to define a new Model class for simulations. 
 
     It will take functions f and G from global scope and make a new Model class
@@ -376,7 +407,7 @@ def quickmodel(f, G, y0, name='NewModel'):
       G: callable(y, t) (defined in global scope) returning (n,m) array
          Optional scalar or matrix-valued function to define noise coefficients
       y0 (Number or array): Initial condition
-      name: Optional class name for the new model
+      name (str): Optional class name for the new model
 
     Returns: 
       new class (subclass of Model)
@@ -417,8 +448,10 @@ def quickmodel(f, G, y0, name='NewModel'):
         if G is not None:
             setattr(newclass, 'G',
                     staticmethod(lambda y, t: np.array([[scalarG(y, t)]])))
-    # Make the new class' official name visible in namespace nsim.nsim
-    globals()[name] = newclass 
+    # Put the new class into namespace __main__ (to cause dill to pickle it)
+    newclass.__module__ = '__main__'
+    import __main__
+    __main__.__dict__[name] = newclass 
     return newclass
 
 

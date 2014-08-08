@@ -6,8 +6,8 @@ Timeseries.add_analyses(analyses1)
 
 from .nsim import (
         Model, ODEModel, SDEModel, DelaySDEModel, Simulation, 
-        MultipleSim, RepeatedSim, ParameterSim, NetworkSim, quickmodel, 
-        quicksim, Error, SimTypeError, SimValueError, SimClusterError)
+        MultipleSim, RepeatedSim, ParameterSim, NetworkSim, newmodel, newsim, 
+        Error, SimTypeError, SimValueError, SimClusterError)
 from . import models, sde
 
 # If python-edf is installed, provide support for loading edf files
