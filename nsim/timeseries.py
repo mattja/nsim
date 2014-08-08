@@ -376,15 +376,27 @@ class _Timeslice(object):
         ts = self.ts
         dt = (ts.tspan[-1] - ts.tspan[0]) / (len(ts) - 1)
         if isinstance(index, numbers.Number):
+            if not (index >= ts.tspan[0] and index <= ts.tspan[-1]):
+                raise ValueError('time %s not in valid range %g to %g' % (
+                        index, ts.tspan[0], ts.tspan[-1]))
             newix = ts.tspan.searchsorted(index)
             return ts[newix]
         elif isinstance(index, types.SliceType):
-            if index.step is None:
-                start, stop = ts.tspan.searchsorted([index.start, index.stop])
+            if index.start is None or index.start < ts.tspan[0]:
+                startt = ts.tspan[0]
+            else:
+                startt = index.start
+            if index.stop is None or index.stop > ts.tspan[-1]:
+                stopt = ts.tspan[-1] + dt/2
+            else:
+                stopt = index.stop
+            start, stop = ts.tspan.searchsorted([startt, stopt])
+            if index.step is None or index.step <= dt:
                 return ts[slice(start, stop, None)]
             else:
-                n = np.floor_divide(index.start - index.stop, index.step)
-                times = np.linspace(index.start, index.stop, n, endpoint=False)
+                times = np.arange(startt, stopt, index.step)
+                if times[-1] == stopt:
+                    times = times[:-1]
                 indices = ts.tspan.searchsorted(times)
                 if indices[-1] == len(ts.tspan):
                     indices = indices[:-1]
