@@ -1,3 +1,3 @@
-Before running the examples, make sure an IPython cluster is started.
+To run the examples, first make sure an IPython cluster is running.
 
-(e.g. type 'ipcluster start') 
+e.g. type 'ipcluster start'
