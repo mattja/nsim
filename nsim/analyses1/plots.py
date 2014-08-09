@@ -58,6 +58,7 @@ def plot(ts, title=None, show=True):
             ax.plot(ts.tspan, ts[...,i])
             plt.setp(ax.get_xticklabels(), visible=False)
             ax.set_ylabel(ts.channelnames[i], **ylabelprops)
+        fig.axes[0].set_title(title)
         plt.setp(fig.axes[num_ax-1].get_xticklabels(), visible=True)
         fig.axes[num_ax-1].set_xlabel('time (s)')
     if show:
