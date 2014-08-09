@@ -35,7 +35,7 @@ class Timeseries(np.ndarray):
     and m is the number of nodes.
 
     Slice by sample index:    timeseries[103280:104800]
-    Slice by time in seconds: timeseries.t[10.0:20.0]
+    Slice by time in seconds: timeseries.t[10.0:20.5]
 
     Methods:
       All functions defined in the package nsim.analyses1 are available as 
@@ -47,6 +47,7 @@ class Timeseries(np.ndarray):
     Attributes:
       tspan: An array of shape (N,) defining the time in seconds that is 
              meant by each time point. This should always remain sorted.
+      t: Allows slicing by time: timeseries.t[starttime:endtime, ...]
       channelnames (array of str, optional): Name of each channel/variable
     """
     def __new__(cls, input_array, tspan=None, fs=None, channelnames=None):
@@ -160,6 +161,7 @@ class Timeseries(np.ndarray):
         if isinstance(obj, self.__class__):
             if obj.shape is () or obj.shape is not () and len(self) ==len(obj):
                 self.tspan = obj.tspan
+                self.t = _Timeslice(self)
                 self.channelnames = obj.channelnames
 
     def __array_prepare__(self, in_arr, context=None):
