@@ -13,8 +13,12 @@ classes:
 
 from __future__ import absolute_import
 import numpy as np
+import warnings
+import copy
 import types
 import numbers
+
+warnings.filterwarnings('ignore', 'comparison to `None`', FutureWarning)
 
 
 class Timeseries(np.ndarray):
@@ -31,11 +35,11 @@ class Timeseries(np.ndarray):
             or repeated simulation.                  
 
     Thus the shape of a Timeseries array is (N, n, m) where N is the 
-    total number of time steps, n is the number of variables of a single node 
-    and m is the number of nodes.
+    total number of time points, n is the number of variables or channels of a
+    single node and m is the number of nodes.
 
-    Slice by sample index:    timeseries[103280:104800]
-    Slice by time in seconds: timeseries.t[10.0:20.5]
+    Slice by array index:  timeseries[103280:104800]
+    Slice by time in seconds:  timeseries.t[10.0:20.5]
 
     Methods:
       All functions defined in the package nsim.analyses1 are available as 
@@ -45,12 +49,31 @@ class Timeseries(np.ndarray):
       Timeseries.add_analyses('file.py')
     
     Attributes:
-      tspan: An array of shape (N,) defining the time in seconds that is 
-             meant by each time point. This should always remain sorted.
+      tspan: An array of shape (N,) giving the time in seconds at each 
+        time point along axis 0 of the array. tspan will always remain sorted.
+        The time points are not necessarily evenly spaced.
+
       t: Allows slicing by time: timeseries.t[starttime:endtime, ...]
-      channelnames (array of str, optional): Name of each channel/variable
+
+      labels (list): For each axis>0, optionally gives names to label 
+        points along the axis. (labels[0] is always None as axis 0 is the
+        time axis, labeled by numbers in `tspan` rather than by strings) 
+        For i>0, labels[i] is a list of str of length shape(timeseries)[i]
+        giving names to each position along axis i. For example labels[1] can 
+        hold names for each variable or channel in a multivariate timeseries.
     """
-    def __new__(cls, input_array, tspan=None, fs=None, channelnames=None):
+    def __new__(cls, input_array, tspan=None, labels=None, fs=None):
+        """Create a new Timeseries from an ordinary numpy array.
+        Args:
+          input_array (ndarray): the timeseries data.
+          tspan (ndarray, optional): An array of shape (N,) giving the time 
+            in seconds at each time point along axis 0 of the array. tspan will
+            always remain sorted. Time points are not necessarily evenly spaced
+          labels (list, optional): For each axis>0, optionally give names 
+            to label points along the axis. (labels[0] must be None).
+          fs (scalar, optional): sample rate. Can be given instead of tspan if
+            all time points are evenly spaced.
+        """
         #print('In __new__')
         obj = np.asarray(input_array).view(cls)
         if tspan is not None:
@@ -62,21 +85,26 @@ class Timeseries(np.ndarray):
                 fs = 1.0
             n = len(input_array)
             obj.tspan = np.linspace(0.0, 1.0*(n-1)/fs, n, endpoint=True)
-        if isinstance(input_array, Timeseries) and channelnames is None:
-            obj.channelnames = input_array.channelnames
+        if isinstance(input_array, Timeseries) and labels is None:
+            obj.labels = input_array.labels
         else:
-            obj.channelnames = channelnames
-        if isinstance(channelnames, list): # TODO: clean this up
-            obj.channelnames = np.array(channelnames)
-        if obj.channelnames is None:
-            if input_array.ndim is 1:
-                obj.channelnames = np.array([''])
-            else:
-                obj.channelnames = np.array([''] * input_array.shape[1])
+            obj.labels = labels
+        if obj.labels is None:
+            obj.labels = [None] * obj.ndim
+        if len(obj.labels) < obj.ndim:
+            obj.labels.extend([None] * (obj.ndim - len(obj.labels)))
+        assert(obj.labels[0] is None) # time axis should not have string labels
+        for i, seq in enumerate(obj.labels):
+            if seq is not None:
+                if len(seq) != obj.shape[i]:
+                    raise ValueError(
+                        '%d labels given for axis %d of length %d' % (
+                        len(seq), i, obj.shape[i]))
+                obj.labels[i] = list(seq)
         obj.t = _Timeslice(obj)
         return obj
 
-    def __init__(self, input_array, tspan=None, channelnames=None):
+    def __init__(self, input_array, tspan=None, labels=None):
         #print('In __init__')
         pass
 
@@ -161,8 +189,8 @@ class Timeseries(np.ndarray):
         if isinstance(obj, self.__class__):
             if obj.shape is () or obj.shape is not () and len(self) ==len(obj):
                 self.tspan = obj.tspan
+                self.labels = obj.labels
                 self.t = _Timeslice(self)
-                self.channelnames = obj.channelnames
 
     def __array_prepare__(self, in_arr, context=None):
         #print('In __array_prepare__')
@@ -173,47 +201,64 @@ class Timeseries(np.ndarray):
         return super(Timeseries, self).__array_wrap__(out_arr, context)
 
     def __getitem__(self, index):
-        """When a Timeseries is sliced, tspan will also be sliced in the 
-        same way as axis 0 of the Timeseries.
-        channelnames will be sliced in the same way as axis 1.
-        If the resulting array is not a Timeseries then return an ndarray.
+        """When a Timeseries is sliced, tspan will be sliced in the 
+        same way as axis 0 of the Timeseries, and labels[i] will be sliced in 
+        the same way as axis i of the Timeseries.
+        If the resulting array is not a Timeseries (for example if the 
+        time axis is sliced to a scalar value) then returns an ndarray.
         """
-        #TODO add support for multidimensional array indexing
+        #TODO add support for using a multidimensional array as index
         #print('In __getitem__, index is ' + str(index))
         new_array = np.asarray(self).__getitem__(index)
+        cur_labels = self.labels
+        cur_shape = self.shape
         is_ts = True
         if (isinstance(index, numbers.Integral) or 
                 isinstance(index, types.SliceType) or
                 isinstance(index, types.EllipsisType) or 
                 isinstance(index, np.ndarray) and index.ndim is 1):
             new_tspan = self.tspan[index]
-            new_channelnames = self.channelnames
+            new_labels = cur_labels
         elif isinstance(index, types.TupleType):
+            if np.newaxis in index or Ellipsis in index:
+                index = copy.deepcopy(index)
             if Ellipsis in index:
                 pos = index.index(Ellipsis)
-                while len(index) < self.ndim:
+                while len(index) < self.ndim + index.count(np.newaxis):
                     index = index[:pos] + (slice(None),)*2 + index[(pos+1):]
+            while np.newaxis in index:
+                pos = index.index(np.newaxis)
+                if pos is 0:
+                    is_ts = False # prepending an axis: no longer a timeseries
+                index = index[:pos] + (slice(None),) + index[(pos+1):]
+                cur_labels = cur_labels[:pos] + [None] + cur_labels[pos:]
+                cur_shape = cur_shape[:pos] + (1,) + cur_shape[pos:]
             if self.tspan.shape is ():
-                new_tspan = None
-                new_channelnames = None
                 is_ts = False
             else:
                 new_tspan = self.tspan[index[0]]
-            if len(index) > 1:
-                new_channelnames = self.channelnames[index[1]]
-                if not isinstance(new_channelnames, np.ndarray):
-                    if new_array.ndim is 1:
-                        new_channelnames = np.array([''])
-                    else:
-                        new_channelnames = np.array([''] * new_array.shape[1])
+            if len(index) is 1:
+                new_labels = cur_labels
             else:
-                new_channelnames = self.channelnames
+                new_labels = [None] # labels[0] is always None
+                for i in xrange(1, len(index)):
+                    # using temp ndarray of labels ensures consistent slicing
+                    if cur_labels[i] is None:
+                        labelarray = np.array([''] * cur_shape[i])
+                    else:
+                        labelarray = np.array(cur_labels[i])
+                    newlabelarray = labelarray[index[i]]
+                    if newlabelarray.shape is not ():
+                        if cur_labels[i] is None:
+                            new_labels.append(None)
+                        else:
+                            new_labels.append(list(newlabelarray))
         elif index is None:
             is_ts = False
         if not isinstance(new_tspan, np.ndarray):
             is_ts = False
         if is_ts:
-            return Timeseries(new_array, new_tspan, new_channelnames)
+            return Timeseries(new_array, new_tspan, new_labels)
         else:
             return np.asarray(new_array)
 
@@ -238,16 +283,16 @@ class Timeseries(np.ndarray):
             last = self.tspan[-1]
         head = u'<%s of shape %s from time %f to %f>:\n' % (
             classname, self.shape, first, last)
-        repr_tspan = repr(self.tspan)
+        repr_tspan = 'tspan=' + repr(self.tspan)
         if len(repr_tspan) > 160:
-            repr_tspan = 'array([ %f, ..., %f ])' % (first, last)
+            repr_tspan = 'tspan=array([ %f, ..., %f ])' % (first, last)
         content = repr(np.asarray(self)).replace('array', 
-            classname, 1).rstrip(')') + ', \n        %s' % repr_tspan
-        if np.alltrue(self.channelnames == ''):
-            channames = ''
-        else: 
-            channames = ', \n        %s' % repr(self.channelnames)
-        return head + content + channames + ')'
+            classname, 1).rstrip(')') + ', \n' + repr_tspan
+        if all(l is None for l in self.labels):
+            labelsrep = ''
+        else:
+            labelsrep = ', \nlabels=' + repr(self.labels)
+        return head + content + labelsrep + ')'
 
     def __reduce__(self):
         """Support pickling Timeseries instances by saving __dict__"""
@@ -261,7 +306,7 @@ class Timeseries(np.ndarray):
         self.__dict__.update(tsstate[1])
 
     def angle(self, deg=0):
-        return Timeseries(np.angle(self, deg=deg), self.tspan)
+        return Timeseries(np.angle(self, deg=deg), self.tspan, self.labels)
 
     # Some of the usual array operations on Timeseries return a plain ndarray. 
     # This depends on whether a time axis is present in the result:
@@ -286,9 +331,12 @@ class Timeseries(np.ndarray):
 
     def reshape(self, newshape, order='C'):
         """If axis 0 is unaffected by the reshape, then returns a Timeseries,
-        otherwise returns an ndarray. See numpy.ndarray.reshape() for details.
+        otherwise returns an ndarray. Preserves labels of axis j only if all 
+        axes<=j are unaffected by the reshape.  
+        See ``numpy.ndarray.reshape()`` for more information
         """
         oldshape = self.shape
+        ar = np.asarray(self).reshape(newshape, order=order)
         if (newshape is -1 and len(oldshape) is 1 or
                 (isinstance(newshape, numbers.Integral) and 
                     newshape == oldshape[0]) or 
@@ -297,9 +345,14 @@ class Timeseries(np.ndarray):
                      (newshape[0] is -1 and np.array(oldshape[1:]).prod() == 
                                             np.array(newshape[1:]).prod())))):
             # then axis 0 is unaffected by the reshape
-            return super(Timeseries, self).reshape(newshape, order=order)
+            newlabels = [None] * ar.ndim
+            i = 1
+            while i < ar.ndim and ar.shape[i] == oldshape[i]:
+                newlabels[i] = self.labels[i]
+                i += 1
+            return Timeseries(ar, self.tspan, newlabels)
         else:
-            return np.asarray(self).reshape(newshape, order=order)
+            return ar
 
     def min(self, axis=None, out=None):
         if (axis is 0 or 

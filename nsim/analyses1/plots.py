@@ -57,7 +57,8 @@ def plot(ts, title=None, show=True):
             _ = [ax._get_lines.color_cycle.next() for j in range(i)]
             ax.plot(ts.tspan, ts[...,i])
             plt.setp(ax.get_xticklabels(), visible=False)
-            ax.set_ylabel(ts.channelnames[i], **ylabelprops)
+            if ts.labels[1] is not None:
+                ax.set_ylabel(ts.labels[1][i], **ylabelprops)
         fig.axes[0].set_title(title)
         plt.setp(fig.axes[num_ax-1].get_xticklabels(), visible=True)
         fig.axes[num_ax-1].set_xlabel('time (s)')

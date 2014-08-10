@@ -37,4 +37,4 @@ def timeseries_from_edf(filename):
     for i in xrange(m):
         e.edf.readsignal(i, 0, n, ar[:, i])
     tspan = np.arange(0, (n - 1 + 0.5) * dt, dt, dtype=np.float64)
-    return nsim.Timeseries(ar, tspan, channelnames)
+    return nsim.Timeseries(ar, tspan, labels=[None, channelnames])

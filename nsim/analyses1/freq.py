@@ -60,9 +60,15 @@ def _plot_psd(ts, freqs, pxx):
             ax.set_yscale('log')
         ax.plot(freqs, pxx[...,i])
         if multinode is True:
-            ax.set_ylabel('node ' + str(i), **ylabelprops)
+            if ts.labels[2] is not None:
+                ax.set_ylabel(ts.labels[2][i], **ylabelprops)
+            else:
+                ax.set_ylabel(u'node %d' % i, **ylabelprops)
         elif num_subplots > 1:
-            ax.set_ylabel(ts.channelnames[i], **ylabelprops)
+            if ts.labels[1] is not None:
+                ax.set_ylabel(ts.labels[1][i], **ylabelprops)
+            else:
+                ax.set_ylabel(u'channel %d' % i, **ylabelprops)
         else:
             pass
         plt.setp(ax.get_xticklabels(), visible=False)
@@ -90,7 +96,7 @@ def lowpass(ts, cutoff_hz, order=3):
         output[:, i] = signal.filtfilt(b, a, ts[:, i])
     if orig_ndim is 1:
         output = output[:, 0]
-    return Timeseries(output, ts.tspan, ts.channelnames)
+    return Timeseries(output, ts.tspan, labels=ts.labels)
 
 
 def highpass(ts, cutoff_hz, order=3):
@@ -110,7 +116,7 @@ def highpass(ts, cutoff_hz, order=3):
         output[:, i] = signal.filtfilt(b, a, ts[:, i])
     if orig_ndim is 1:
         output = output[:, 0]
-    return Timeseries(output, ts.tspan, ts.channelnames)
+    return Timeseries(output, ts.tspan, labels=ts.labels)
 
 
 def bandpass(ts, low_hz, high_hz, order=3):
@@ -131,7 +137,7 @@ def bandpass(ts, low_hz, high_hz, order=3):
         output[:, i] = signal.filtfilt(b, a, ts[:, i])
     if orig_ndim is 1:
         output = output[:, 0]
-    return Timeseries(output, ts.tspan, ts.channelnames)
+    return Timeseries(output, ts.tspan, labels=ts.labels)
 
 
 def notch(ts, freq_hz, bandwidth_hz=1.0):
@@ -163,25 +169,25 @@ def notch(ts, freq_hz, bandwidth_hz=1.0):
         output[:, i] = signal.filtfilt(b, a, ts[:, i])
     if orig_ndim is 1:
         output = output[:, 0]
-    return Timeseries(output, ts.tspan, ts.channelnames)
+    return Timeseries(output, ts.tspan, labels=ts.labels)
 
 
 def hilbert(ts):
     """Analytic signal, using the Hilbert transform"""
     output = signal.hilbert(ts, axis=0)
-    return Timeseries(output, ts.tspan, ts.channelnames)
+    return Timeseries(output, ts.tspan, labels=ts.labels)
 
 
 def hilbert_amplitude(ts):
     """Amplitude of the analytic signal, using the Hilbert transform"""
     output = np.abs(signal.hilbert(ts, axis=0))
-    return Timeseries(output, ts.tspan, ts.channelnames)
+    return Timeseries(output, ts.tspan, labels=ts.labels)
 
 
 def hilbert_phase(ts):
     """Phase of the analytic signal, using the Hilbert transform"""
     output = np.angle(signal.hilbert(ts, axis=0))
-    return Timeseries(output, ts.tspan, ts.channelnames)
+    return Timeseries(output, ts.tspan, labels=ts.labels)
 
 
 def cwt(ts, freqs=np.logspace(0, 2), wavelet=cwtmorlet, plot=True):

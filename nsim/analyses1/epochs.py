@@ -90,7 +90,7 @@ def variability_fp(ts, freqs=None, ncycles=6, plot=True):
         allchannels_variability[:, i, 0] = _rescale(logvar_centfreq)
         allchannels_variability[:, i, 1] = _rescale(logvar_maxpower)
     allchannels_variability = Timeseries(allchannels_variability, 
-                                         ts.tspan, ts.channelnames)
+                                         ts.tspan, labels=ts.labels)
     if plot:
         _plot_variability(ts, allchannels_variability)
     return allchannels_variability
@@ -128,7 +128,10 @@ def _plot_variability(ts, variability, threshold=None, epochs=None):
             axprops['yticks'] = []
         ax = fig.add_axes(rect, **axprops)
         ax.plot(ts.tspan, ts[:, i])
-        ax.set_ylabel(ts.channelnames[i], **ylabelprops)
+        if ts.labels[1] is None:
+            ax.set_ylabel(u'channel %d' % i, **ylabelprops)
+        else:
+            ax.set_ylabel(ts.labels[1][i], **ylabelprops)
         plt.setp(ax.get_xticklabels(), visible=False)
         if i is channels - 1:
             plt.setp(ax.get_xticklabels(), visible=True)
