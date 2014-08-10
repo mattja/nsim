@@ -73,10 +73,10 @@ def variability_fp(ts, freqs=None, ncycles=6, plot=True):
     # hw is half window size (in number of samples)
     hw = np.int64(np.ceil(0.5 * ncycles * fs / centroid_freq))  # shape (n, m)
     allchannels_variability = np.zeros((n, channels, 2)) # array for the output
-    for i in xrange(channels):
+    for i in range(channels):
         logvar_centfreq = np.zeros(n)
         logvar_maxpower = np.zeros(n)
-        for j in xrange(n):
+        for j in range(n):
             # compute variance of two chosen signal properties over a 
             # window of 2*hw+1 samples centered on sample number j
             wstart = j - hw[j, i]
@@ -120,7 +120,7 @@ def _plot_variability(ts, variability, threshold=None, epochs=None):
                        horizontalalignment='right', 
                        verticalalignment='center', 
                        x=-0.01)
-    for i in xrange(channels):
+    for i in range(channels):
         rect = (0.1, 0.85*(channels - i - 1)/channels + 0.1, 
                 0.8, 0.85/channels)
         axprops = dict()
@@ -145,7 +145,7 @@ def _plot_variability(ts, variability, threshold=None, epochs=None):
             ax2.plot(ts.tspan, variability[:, i, :], linestyle='dotted')
             if i is 0:
                 ax2.legend(['variability (mean)'] + 
-                          ['variability %d' % j for j in xrange(vmeasures)], 
+                          ['variability %d' % j for j in range(vmeasures)], 
                           loc='best')
         else:
             ax2.plot(ts.tspan, variability[:, i, 0])
@@ -204,7 +204,7 @@ def epochs(ts, variability=None, threshold=0.0, minlength=1.0, plot=True):
     dt = (1.0*ts.tspan[-1] - ts.tspan[0]) / (n - 1)
     fs = 1.0 / dt
     allchannels_epochs = []
-    for i in xrange(channels):
+    for i in range(channels):
         v = variability[:, i, :]
         v = np.nanmean(v, axis=1) # mean of q different variability measures
         # then smooth the variability with a low-pass filter
@@ -239,11 +239,11 @@ def epochs(ts, variability=None, threshold=0.0, minlength=1.0, plot=True):
                     # Get largest subthreshold interval surrounding the minimum
                     startix = m - 1
                     endix = m + 1
-                    for startix in xrange(m - 1, 0, -1):
+                    for startix in range(m - 1, 0, -1):
                         if np.isnan(v[startix]) or v[startix] > threshold:
                             startix += 1
                             break
-                    for endix in xrange(m + 1, len(v), 1):
+                    for endix in range(m + 1, len(v), 1):
                         if np.isnan(v[endix]) or v[endix] > threshold:
                             break
                     if (endix - startix) * dt >= minlength: 
@@ -291,10 +291,10 @@ def epochs_distributed(ts, variability=None, threshold=0.0, minlength=1.0,
     channels = ts.shape[1]
     if variability is None:
         calcs = [_EpochCalc(ts[:, i], None, 
-                            threshold, minlength) for i in xrange(channels)]
+                            threshold, minlength) for i in range(channels)]
     else:
         calcs = [_EpochCalc(ts[:, i], variability[:, i], 
-                            threshold, minlength) for i in xrange(channels)]
+                            threshold, minlength) for i in range(channels)]
     distob.scatter(calcs)
     results = distob.call_all(calcs, 'epochs')
     vars, allchannels_epochs = zip(*results)

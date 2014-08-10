@@ -13,10 +13,16 @@ classes:
 
 from __future__ import absolute_import
 import numpy as np
+from sys import hexversion
 import warnings
 import copy
 import types
 import numbers
+
+# types for compatibility across python 2 and 3
+_SliceType = type(slice(None))
+_EllipsisType = type(Ellipsis)
+_TupleType = type(())
 
 warnings.filterwarnings('ignore', 'comparison to `None`', FutureWarning)
 
@@ -214,12 +220,12 @@ class Timeseries(np.ndarray):
         cur_shape = self.shape
         is_ts = True
         if (isinstance(index, numbers.Integral) or 
-                isinstance(index, types.SliceType) or
-                isinstance(index, types.EllipsisType) or 
+                isinstance(index, _SliceType) or
+                isinstance(index, _EllipsisType) or 
                 isinstance(index, np.ndarray) and index.ndim is 1):
             new_tspan = self.tspan[index]
             new_labels = cur_labels
-        elif isinstance(index, types.TupleType):
+        elif isinstance(index, _TupleType):
             if np.newaxis in index or Ellipsis in index:
                 index = copy.deepcopy(index)
             if Ellipsis in index:
@@ -241,7 +247,7 @@ class Timeseries(np.ndarray):
                 new_labels = cur_labels
             else:
                 new_labels = [None] # labels[0] is always None
-                for i in xrange(1, len(index)):
+                for i in range(1, len(index)):
                     # using temp ndarray of labels ensures consistent slicing
                     if cur_labels[i] is None:
                         labelarray = np.array([''] * cur_shape[i])
@@ -340,7 +346,7 @@ class Timeseries(np.ndarray):
         if (newshape is -1 and len(oldshape) is 1 or
                 (isinstance(newshape, numbers.Integral) and 
                     newshape == oldshape[0]) or 
-                (isinstance(newshape, types.TupleType) and 
+                (isinstance(newshape, _TupleType) and 
                     (newshape[0] == oldshape[0] or 
                      (newshape[0] is -1 and np.array(oldshape[1:]).prod() == 
                                             np.array(newshape[1:]).prod())))):
@@ -357,7 +363,7 @@ class Timeseries(np.ndarray):
     def min(self, axis=None, out=None):
         if (axis is 0 or 
                 self.ndim is 1 or 
-                isinstance(axis, types.TupleType) and 0 in axis):
+                isinstance(axis, _TupleType) and 0 in axis):
             return np.asarray(self).min(axis, out)
         else:
             return super(Timeseries, self).min(axis, out)
@@ -365,7 +371,7 @@ class Timeseries(np.ndarray):
     def max(self, axis=None, out=None):
         if (axis is 0 or 
                 self.ndim is 1 or 
-                isinstance(axis, types.TupleType) and 0 in axis):
+                isinstance(axis, _TupleType) and 0 in axis):
             return np.asarray(self).max(axis, out)
         else:
             return super(Timeseries, self).max(axis, out)
@@ -373,7 +379,7 @@ class Timeseries(np.ndarray):
     def ptp(self, axis=None, out=None):
         if (axis is 0 or 
                 self.ndim is 1 or 
-                isinstance(axis, types.TupleType) and 0 in axis):
+                isinstance(axis, _TupleType) and 0 in axis):
             return np.asarray(self).ptp(axis, out)
         else:
             return super(Timeseries, self).ptp(axis, out)
@@ -381,7 +387,7 @@ class Timeseries(np.ndarray):
     def mean(self, axis=None, dtype=None, out=None):
         if (axis is 0 or 
                 self.ndim is 1 or 
-                isinstance(axis, types.TupleType) and 0 in axis):
+                isinstance(axis, _TupleType) and 0 in axis):
             return np.asarray(self).mean(axis, dtype, out)
         else:
             return super(Timeseries, self).mean(axis, dtype, out)
@@ -389,7 +395,7 @@ class Timeseries(np.ndarray):
     def std(self, axis=None, dtype=None, out=None, ddof=0):
         if (axis is 0 or 
                 self.ndim is 1 or 
-                isinstance(axis, types.TupleType) and 0 in axis):
+                isinstance(axis, _TupleType) and 0 in axis):
             return np.asarray(self).std(axis, dtype, out, ddof)
         else:
             return super(Timeseries, self).std(axis, dtype, out, ddof)
@@ -397,7 +403,7 @@ class Timeseries(np.ndarray):
     def var(self, axis=None, dtype=None, out=None, ddof=0):
         if (axis is 0 or 
                 self.ndim is 1 or 
-                isinstance(axis, types.TupleType) and 0 in axis):
+                isinstance(axis, _TupleType) and 0 in axis):
             return np.asarray(self).var(axis, dtype, out, ddof)
         else:
             return super(Timeseries, self).var(axis, dtype, out, ddof)
@@ -436,7 +442,7 @@ class _Timeslice(object):
                         index, ts.tspan[0], ts.tspan[-1]))
             newix = ts.tspan.searchsorted(index)
             return ts[newix]
-        elif isinstance(index, types.SliceType):
+        elif isinstance(index, _SliceType):
             if index.start is None or index.start < ts.tspan[0]:
                 startt = ts.tspan[0]
             else:
@@ -456,14 +462,14 @@ class _Timeslice(object):
                 if indices[-1] == len(ts.tspan):
                     indices = indices[:-1]
                 return ts[indices]
-        elif isinstance(index, types.EllipsisType) or index is None:
+        elif isinstance(index, _EllipsisType) or index is None:
             return ts[index]
         elif isinstance(index, np.ndarray) and index.ndim is 1:
             indices = ts.tspan.searchsorted(index)
             if indices[-1] == len(ts.tspan):
                 indices = indices[:-1]
             return ts[indices]
-        elif isinstance(index, types.TupleType):
+        elif isinstance(index, _TupleType):
             timeix = index[0]
             otherix = index[1:]
             if len(otherix) is 1:
@@ -477,12 +483,13 @@ class _Timeslice(object):
             raise TypeError("Time slicing can't handle that type of index yet")
 
     def __setitem__(self, index, value):
+        #TODO update logic to match __getitem__
         ts = self.ts
         dt = (ts.tspan[-1] - ts.tspan[0]) / (len(ts) - 1)
         if isinstance(index, numbers.Number):
             newix = ts.tspan.searchsorted(index)
             return ts.__setitem__(newix, value)
-        elif isinstance(index, types.SliceType):
+        elif isinstance(index, _SliceType):
             if index.step is None:
                 start, stop = ts.tspan.searchsorted(index.start, index.stop)
                 return ts.__setitem__(slice(start, stop, None), value)
@@ -493,14 +500,14 @@ class _Timeslice(object):
                 if indices[-1] == len(ts.tspan):
                     indices = indices[:-1]
                 return ts.__setitem__(indices, value)
-        elif isinstance(index, types.EllipsisType) or index is None:
+        elif isinstance(index, _EllipsisType) or index is None:
             return ts.__setitem__(index, value)
         elif isinstance(index, np.ndarray) and index.ndim is 1:
             indices = ts.tspan.searchsorted(index)
             if indices[-1] == len(ts.tspan):
                 indices = indices[:-1]
             return ts.__setitem__(indices, value)
-        elif isinstance(index, types.TupleType):
+        elif isinstance(index, _TupleType):
             timeix = index[0]
             ts = ts.t[timeix]
             otherix = index[1:]

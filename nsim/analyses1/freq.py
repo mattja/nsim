@@ -92,7 +92,7 @@ def lowpass(ts, cutoff_hz, order=3):
     if not np.all(np.abs(np.roots(a)) < 1.0):
         raise ValueError('Filter will not be stable with these values.')
     output = np.zeros((len(ts), channels))
-    for i in xrange(channels):
+    for i in range(channels):
         output[:, i] = signal.filtfilt(b, a, ts[:, i])
     if orig_ndim is 1:
         output = output[:, 0]
@@ -112,7 +112,7 @@ def highpass(ts, cutoff_hz, order=3):
     if not np.all(np.abs(np.roots(a)) < 1.0):
         raise ValueError('Filter will not be stable with these values.')
     output = np.zeros((len(ts), channels))
-    for i in xrange(channels):
+    for i in range(channels):
         output[:, i] = signal.filtfilt(b, a, ts[:, i])
     if orig_ndim is 1:
         output = output[:, 0]
@@ -133,7 +133,7 @@ def bandpass(ts, low_hz, high_hz, order=3):
     if not np.all(np.abs(np.roots(a)) < 1.0):
         raise ValueError('Filter will not be stable with these values.')
     output = np.zeros((len(ts), channels))
-    for i in xrange(channels):
+    for i in range(channels):
         output[:, i] = signal.filtfilt(b, a, ts[:, i])
     if orig_ndim is 1:
         output = output[:, 0]
@@ -165,7 +165,7 @@ def notch(ts, freq_hz, bandwidth_hz=1.0):
     if not np.all(np.abs(np.roots(a)) < 1.0):
         raise ValueError('Filter will not be stable with these values.')
     output = np.zeros((len(ts), channels))
-    for i in xrange(channels):
+    for i in range(channels):
         output[:, i] = signal.filtfilt(b, a, ts[:, i])
     if orig_ndim is 1:
         output = output[:, 0]
@@ -211,7 +211,7 @@ def cwt(ts, freqs=np.logspace(0, 2), wavelet=cwtmorlet, plot=True):
     fs = (len(ts) - 1.0) / (1.0*ts.tspan[-1] - ts.tspan[0])
     x = signal.detrend(ts, axis=0)
     coefs = np.zeros((len(ts), len(freqs), channels), np.complex128)
-    for i in xrange(channels):
+    for i in range(channels):
         coefs[:, :, i] = roughcwt(x[:, i], cwtmorlet, fs/freqs).T
     if plot:
         _plot_cwt(ts, coefs, freqs)
@@ -240,10 +240,10 @@ def cwt_distributed(ts, freqs=np.logspace(0, 2), wavelet=cwtmorlet, plot=True):
         return roughcwt(ts, freqs, wavelet, plot)
     channels = ts.shape[1]
     coefs = np.zeros((len(ts), len(freqs), channels), np.complex128)
-    ts_list = [ts[:, i] for i in xrange(channels)]
+    ts_list = [ts[:, i] for i in range(channels)]
     distob.scatter(ts_list)
     coefs_list = distob.call_all(ts_list, 'cwt', freqs, wavelet, plot=False)
-    for i in xrange(channels):
+    for i in range(channels):
         coefs[:, :, i] = coefs_list[i] 
     if plot:
         _plot_cwt(ts, coefs, freqs)
@@ -263,7 +263,7 @@ def _plot_cwt(ts, coefs, freqs, tsize=1024, fsize=512):
     from scipy import interpolate
     channels = ts.shape[1]
     fig = plt.figure()
-    for i in xrange(channels):
+    for i in range(channels):
         rect = (0.1, 0.85*(channels - i - 1)/channels + 0.1, 
                 0.8, 0.85/channels)
         ax = fig.add_axes(rect)
