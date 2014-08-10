@@ -14,6 +14,7 @@ from __future__ import absolute_import
 import edflib
 import nsim
 import numpy as np
+from os import path
 
 def timeseries_from_edf(filename):
     """load a multi-channel Timeseries from an EDF (European Data Format) file
@@ -24,6 +25,8 @@ def timeseries_from_edf(filename):
     Returns: 
       Timeseries
     """
+    if not path.isfile(filename):
+        raise nsim.Error("file not found: '%s'" % filename)
     e = edflib.EDF(filename)
     if np.ptp(e.signal_nsamples) != 0:
         raise nsim.Error('channels have differing numbers of samples')
