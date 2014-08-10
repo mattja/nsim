@@ -75,19 +75,18 @@ def _remove_pi_crossings(ts):
     If ts does not need adjustment, then return ts. 
     Otherwise return a modified copy.
     """
-    orig_shape = ts.shape
+    orig_ts = ts
     if ts.ndim is 1:
-        ts = ts.reshape((-1, 1))
-    if ts.ndim is 2:
-        ts = ts.reshape((-1, ts.shape[1], 1))
+        ts = ts[:, np.newaxis, np.newaxis]
+    elif ts.ndim is 2:
+        ts = ts[:, np.newaxis]
     # Get the indices of those variables that have range of approx -pi to pi
     tsmax = ts.max(axis=0)
     tsmin = ts.min(axis=0)
     phase_vars = np.transpose(np.nonzero((np.abs(tsmax - np.pi) < 0.01) & 
                                          (np.abs(tsmin + np.pi) < 0.01)))
     if len(phase_vars) is 0:
-        # return unchanged time series
-        return ts.reshape(orig_shape)
+        return orig_ts
     else:
         ts = ts.copy()
         for v in phase_vars:
