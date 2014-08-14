@@ -91,7 +91,8 @@ def lowpass(ts, cutoff_hz, order=3):
     b, a = signal.butter(order, cutoff, btype='low')
     if not np.all(np.abs(np.roots(a)) < 1.0):
         raise ValueError('Filter will not be stable with these values.')
-    output = np.zeros((len(ts), channels))
+    dtype = ts.dtype
+    output = np.zeros((len(ts), channels), dtype)
     for i in range(channels):
         output[:, i] = signal.filtfilt(b, a, ts[:, i])
     if orig_ndim is 1:
@@ -111,7 +112,8 @@ def highpass(ts, cutoff_hz, order=3):
     b, a = signal.butter(order, cutoff, btype='highpass')
     if not np.all(np.abs(np.roots(a)) < 1.0):
         raise ValueError('Filter will not be stable with these values.')
-    output = np.zeros((len(ts), channels))
+    dtype = ts.dtype
+    output = np.zeros((len(ts), channels), dtype)
     for i in range(channels):
         output[:, i] = signal.filtfilt(b, a, ts[:, i])
     if orig_ndim is 1:
@@ -132,7 +134,8 @@ def bandpass(ts, low_hz, high_hz, order=3):
     b, a = signal.butter(order, [low, high], btype='band')
     if not np.all(np.abs(np.roots(a)) < 1.0):
         raise ValueError('Filter will not be stable with these values.')
-    output = np.zeros((len(ts), channels))
+    dtype = ts.dtype
+    output = np.zeros((len(ts), channels), dtype)
     for i in range(channels):
         output[:, i] = signal.filtfilt(b, a, ts[:, i])
     if orig_ndim is 1:
@@ -164,7 +167,8 @@ def notch(ts, freq_hz, bandwidth_hz=1.0):
     b[2] = K
     if not np.all(np.abs(np.roots(a)) < 1.0):
         raise ValueError('Filter will not be stable with these values.')
-    output = np.zeros((len(ts), channels))
+    dtype = ts.dtype
+    output = np.zeros((len(ts), channels), dtype)
     for i in range(channels):
         output[:, i] = signal.filtfilt(b, a, ts[:, i])
     if orig_ndim is 1:
@@ -210,7 +214,8 @@ def cwt(ts, freqs=np.logspace(0, 2), wavelet=cwtmorlet, plot=True):
     channels = ts.shape[1]
     fs = (len(ts) - 1.0) / (1.0*ts.tspan[-1] - ts.tspan[0])
     x = signal.detrend(ts, axis=0)
-    coefs = np.zeros((len(ts), len(freqs), channels), np.complex128)
+    dtype = wavelet(fs/freqs[0], fs/freqs[0]).dtype
+    coefs = np.zeros((len(ts), len(freqs), channels), dtype)
     for i in range(channels):
         coefs[:, :, i] = roughcwt(x[:, i], cwtmorlet, fs/freqs).T
     if plot:
@@ -239,7 +244,9 @@ def cwt_distributed(ts, freqs=np.logspace(0, 2), wavelet=cwtmorlet, plot=True):
     if ts.ndim is 1 or ts.shape[1] is 1:
         return roughcwt(ts, freqs, wavelet, plot)
     channels = ts.shape[1]
-    coefs = np.zeros((len(ts), len(freqs), channels), np.complex128)
+    fs = (len(ts) - 1.0) / (1.0*ts.tspan[-1] - ts.tspan[0])
+    dtype = wavelet(fs/freqs[0], fs/freqs[0]).dtype
+    coefs = np.zeros((len(ts), len(freqs), channels), dtype)
     ts_list = [ts[:, i] for i in range(channels)]
     distob.scatter(ts_list)
     coefs_list = distob.call_all(ts_list, 'cwt', freqs, wavelet, plot=False)

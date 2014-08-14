@@ -63,19 +63,25 @@ def variability_fp(ts, freqs=None, ncycles=6, plot=True):
     n = len(ts)
     dt = (1.0*ts.tspan[-1] - ts.tspan[0]) / (n - 1)
     fs = 1.0 / dt
+    dtype = ts.dtype
     # Estimate time-resolved power spectra using continuous wavelet transform
     coefs = ts.cwt(freqs, wavelet=cwtmorlet, plot=False)
-    powers = (coefs * np.conj(coefs)).real
+    # this is a huge array so try to do operations in place
+    powers = np.square(np.abs(coefs, coefs), coefs).real.astype(dtype, 
+                                                                copy=False)
+    del coefs
     max_power = np.max(powers, axis=1)
     total_power = np.sum(powers, axis=1, keepdims=True)
-    rel_power = powers / total_power
+    rel_power = np.divide(powers, total_power, powers)
+    del powers
     centroid_freq = np.tensordot(freqs, rel_power, axes=(0, 1))  # shape (n, m)
+    del rel_power
     # hw is half window size (in number of samples)
     hw = np.int64(np.ceil(0.5 * ncycles * fs / centroid_freq))  # shape (n, m)
-    allchannels_variability = np.zeros((n, channels, 2)) # array for the output
+    allchannels_variability = np.zeros((n, channels, 2), dtype) # output array
     for i in range(channels):
-        logvar_centfreq = np.zeros(n)
-        logvar_maxpower = np.zeros(n)
+        logvar_centfreq = np.zeros(n, dtype)
+        logvar_maxpower = np.zeros(n, dtype)
         for j in range(n):
             # compute variance of two chosen signal properties over a 
             # window of 2*hw+1 samples centered on sample number j

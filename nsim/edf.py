@@ -36,8 +36,12 @@ def timeseries_from_edf(filename):
     m = e.signals_in_file
     channelnames = e.signal_labels
     dt = 1.0/e.samplefreqs[0]
+    # edflib requires input buffer of float64s
     ar = np.zeros((n, m), dtype=np.float64, order='F')
     for i in range(m):
         e.edf.readsignal(i, 0, n, ar[:, i])
-    tspan = np.arange(0, (n - 1 + 0.5) * dt, dt, dtype=np.float64)
+    # EDF files hold <=16 bits of information for each sample. Representing as
+    # double precision (64bit) is unnecessary use of memory. use 32 bit float:
+    ar = ar.astype(np.float32)
+    tspan = np.arange(0, (n - 1 + 0.5) * dt, dt, dtype=np.float32)
     return nsim.Timeseries(ar, tspan, labels=[None, channelnames])
