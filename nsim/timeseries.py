@@ -353,7 +353,7 @@ class Timeseries(np.ndarray):
             # then axis 0 is unaffected by the reshape
             newlabels = [None] * ar.ndim
             i = 1
-            while i < ar.ndim and ar.shape[i] == oldshape[i]:
+            while i < ar.ndim and i < self.ndim and ar.shape[i] == oldshape[i]:
                 newlabels[i] = self.labels[i]
                 i += 1
             return Timeseries(ar, self.tspan, newlabels)
