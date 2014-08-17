@@ -48,7 +48,7 @@ setup(
     cmdclass = {'test': Tox},
     author_email='mattja6@gmail.com',
     description='Simulate systems from ODEs or SDEs, analyze timeseries.',
-    long_description=read('README.md'),
+    long_description=read('README.rst'),
     packages=['nsim', 'nsim.analyses1', 'nsim.analysesN', 'nsim.models'],
     platforms='any',
     zip_safe=False,
@@ -61,5 +61,6 @@ setup(
         'Topic :: Scientific/Engineering :: Physics',
         'Topic :: System :: Distributed Computing',
         ],
-    extras_require={'read_EDF_files': ['python-edf>=0.4']}
+    extras_require={'read_EDF_BDF_files': ['python-edf>=0.4'],
+                    'read_all_files': ['python-biosig>=1.3']}
 )

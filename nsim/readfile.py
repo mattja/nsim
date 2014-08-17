@@ -1,0 +1,93 @@
+# Copyright 2014 Matthew J. Aburn
+# 
+# This program is free software: you can redistribute it and/or modify 
+# it under the terms of the GNU General Public License as published by 
+# the Free Software Foundation, either version 3 of the License, or 
+# (at your option) any later version. See <http://www.gnu.org/licenses/>.
+
+"""
+functions:
+  timeseries_from_file()   load a multi-channel Timeseries from many file types
+"""
+
+from __future__ import absolute_import
+import nsim
+import numpy as np
+from os import path
+
+def timeseries_from_file(filename):
+    """Load a multi-channel Timeseries from any file type supported by `biosig`
+
+    Supported file formats include EDF/EDF+, BDF/BDF+, EEG, CNT and GDF.
+    Full list is here: http://pub.ist.ac.at/~schloegl/biosig/TESTED
+
+    For EDF, EDF+, BDF and BDF+ files, we will use python-edf 
+    if it is installed, otherwise will fall back to python-biosig.
+
+    Args: 
+      filename
+
+    Returns: 
+      Timeseries
+    """
+    if not path.isfile(filename):
+        raise nsim.Error("file not found: '%s'" % filename)
+    is_edf_bdf = (filename[-4:].lower() in ['.edf', '.bdf'])
+    if is_edf_bdf:
+        try: 
+            import edflib
+            return _load_edflib(filename)
+        except ImportError:
+            print('python-edf not installed. trying python-biosig instead...')
+    try:
+        import biosig
+        return _load_biosig(filename)
+    except ImportError:
+        message = (
+            """To load timeseries from file, ensure python-biosig is installed
+            e.g. on Ubuntu or Debian type `apt-get install python-biosig`
+            or get it from http://biosig.sf.net/download.html""")
+        if is_edf_bdf:
+            message += """\n(For EDF/BDF files, can instead install python-edf:
+                       https://bitbucket.org/cleemesser/python-edf/ )"""
+        raise nsim.Error(message)
+
+
+def _load_biosig(filename):
+    import biosig
+    hdr = biosig.constructHDR(0, 0)
+    hdr = biosig.sopen(filename, 'r', hdr)
+    import ipdb; ipdb.set_trace() #**BREAKPOINT**
+    data = biosig.sread(0, hdr.NRec, hdr)
+    biosig.sclose(hdr)
+    biosig.destructHDR(hdr)
+
+
+def _load_edflib(filename):
+    """load a multi-channel Timeseries from an EDF (European Data Format) file
+
+    Args: 
+      filename: EDF file
+
+    Returns: 
+      Timeseries
+    """
+    import edflib
+    e = edflib.EDF(filename)
+    if np.ptp(e.signal_nsamples) != 0:
+        raise nsim.Error('channels have differing numbers of samples')
+    if np.ptp(e.samplefreqs) != 0:
+        raise nsim.Error('channels have differing sample rates')
+    n = max(e.signal_nsamples)
+    m = e.signals_in_file
+    channelnames = e.signal_labels
+    dt = 1.0/e.samplefreqs[0]
+    # edflib requires input buffer of float64s
+    ar = np.zeros((n, m), dtype=np.float64, order='F')
+    for i in range(m):
+        e.edf.readsignal(i, 0, n, ar[:, i])
+    # EDF files hold <=16 bits of information for each sample. Representing as
+    # double precision (64bit) is unnecessary use of memory. use 32 bit float:
+    ar = ar.astype(np.float32)
+    tspan = np.arange(0, (n - 1 + 0.5) * dt, dt, dtype=np.float32)
+    return nsim.Timeseries(ar, tspan, labels=[None, channelnames])

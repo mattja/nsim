@@ -9,11 +9,6 @@ from .nsim import (
         MultipleSim, RepeatedSim, ParameterSim, NetworkSim, newmodel, newsim, 
         Error, SimTypeError, SimValueError, SimClusterError)
 from . import models, sde
+from .readfile import timeseries_from_file
 
-# If python-edf is installed, provide support for loading edf files
-try:
-    from .edf import timeseries_from_edf
-except ImportError:
-    pass
-
-__version__ = '0.1.3'
+__version__ = '0.1.4'
