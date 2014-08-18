@@ -110,7 +110,7 @@ class Timeseries(np.ndarray):
         obj.t = _Timeslice(obj)
         return obj
 
-    def __init__(self, input_array, tspan=None, labels=None):
+    def __init__(self, input_array, tspan=None, labels=None, fs=None):
         #print('In __init__')
         pass
 
