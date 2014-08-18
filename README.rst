@@ -1,6 +1,7 @@
 nsim
 ====
 
+Simulate systems from ODEs or SDEs, analyze timeseries.
 N.B. this is a pre-release: still a lot left to be done!
 
 Overview
