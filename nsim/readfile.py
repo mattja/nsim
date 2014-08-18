@@ -57,10 +57,26 @@ def _load_biosig(filename):
     import biosig
     hdr = biosig.constructHDR(0, 0)
     hdr = biosig.sopen(filename, 'r', hdr)
-    import ipdb; ipdb.set_trace() #**BREAKPOINT**
-    data = biosig.sread(0, hdr.NRec, hdr)
+    # The logic here does not match the biosig API. But it is deliberately
+    # this way to work around a bug loading EDF files in python-biosig 1.3.
+    # TODO: revisit this code when I finally get python-biosig 1.6 to install.
+    channels = hdr.NS - 1
+    fs = hdr.SampleRate / channels
+    npoints = hdr.NRec * hdr.SPR / channels
+    ar = np.zeros((npoints, channels), dtype=np.float64)
+    channelnames = []
+    for i in range(channels):
+        label = hdr.CHANNEL[i].Label
+        if '\x00' in label:
+            label = label[:label.index('\x00')]
+        channelnames.append(label)
+        for j in range(hdr.NS):
+            hdr.CHANNEL[j].OnOff = int(j == i)
+        data = biosig.sread(0, hdr.NRec, hdr)
+        ar[:, i] = data.reshape((npoints, channels))[:, 0]
     biosig.sclose(hdr)
     biosig.destructHDR(hdr)
+    return nsim.Timeseries(ar, labels=[None, channelnames], fs=fs)
 
 
 def _load_edflib(filename):
