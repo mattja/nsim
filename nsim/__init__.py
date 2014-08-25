@@ -1,6 +1,6 @@
 from __future__ import absolute_import
 
-from .timeseries import Timeseries, merge, timeseries_from_mat
+from .timeseries import Timeseries, merge
 from . import analyses1
 Timeseries.add_analyses(analyses1)
 
@@ -9,6 +9,6 @@ from .nsim import (
         MultipleSim, RepeatedSim, ParameterSim, NetworkSim, newmodel, newsim, 
         Error, SimTypeError, SimValueError, SimClusterError)
 from . import models, sde
-from .readfile import timeseries_from_file
+from .readfile import timeseries_from_mat, timeseries_from_file
 
-__version__ = '0.1.4'
+__version__ = '0.1.5'

@@ -223,15 +223,14 @@ class Simulation(object):
 @distob.proxy_methods(Simulation)
 class RemoteSimulation(distob.Remote, Simulation):
     """Local object representing a remote Simulation"""
-    def __init__(self, ref, client):
+    def __init__(self, ref):
         """Make a RemoteSimulation to access an already-existing Simulation 
         object, which may be on a remote engine.
 
         Args:
           ref (Ref): reference to a Simulation to be controlled by this proxy
-          client (IPython.parallel.client)
         """
-        super(RemoteSimulation, self).__init__(ref, client)
+        super(RemoteSimulation, self).__init__(ref)
         #self.compute()
 
     def compute(self):

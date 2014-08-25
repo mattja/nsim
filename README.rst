@@ -31,6 +31,12 @@ and to analyze the properties of the resulting timeseries.
 TODO
 ----
 
+-  Write statistical analyses applying to ensembles of repeated SDE simulations
+
+-  Directly support SDEs expressed in Ito form. (Currently need to write
+   it in Stratonovich form as an intermediate step before simulating in
+   nsim)
+
 -  Add support for models with time delays (DDEs and delay SDEs)
 
 -  Support network models of dynamical nodes, auto-generated from models
@@ -41,15 +47,8 @@ TODO
 -  Auto-generate multiple simulations covering a lattice of points in
    parameter space, to run in parallel.
 
--  Directly support SDEs expressed in Ito form. (Currently need to write
-   it in Stratonovich form as an intermediate step before simulating in
-   nsim)
-
 -  Optionally allow the equations to be specified and integrated in C,
    for speed
-
--  | Write statistical analyses applying to ensembles of repeated SDE simulations
-   | (First will improve the ``distob`` package to add a DistArray class, allowing a single ndarray to be spread across the cluster)
 
 Thanks
 ------

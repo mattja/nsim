@@ -1,5 +1,5 @@
 IPython>=2.1
-distob>=0.1.2
+distob>=0.1.3
 numpy>=1.6
 scipy>=0.9
 matplotlib>=1.1
