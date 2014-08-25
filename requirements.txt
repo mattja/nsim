@@ -1,0 +1,6 @@
+IPython>=2.1
+distob>=0.1.2
+numpy>=1.6
+scipy>=0.9
+matplotlib>=1.1
+sphinxcontrib-napoleon>=0.2.8
