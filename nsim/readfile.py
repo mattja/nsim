@@ -38,7 +38,7 @@ def timeseries_from_mat(filename, varname=None, fs=1.0):
     else:
         mat_dict = sio.loadmat(filename, variable_names=(varname,))
         array = mat_dict.popitem()[1]
-    return nsim.Timeseries(array, fs=fs)
+    return Timeseries(array, fs=fs)
 
 
 def timeseries_from_file(filename):
@@ -57,7 +57,7 @@ def timeseries_from_file(filename):
       Timeseries
     """
     if not path.isfile(filename):
-        raise nsim.Error("file not found: '%s'" % filename)
+        raise Error("file not found: '%s'" % filename)
     is_edf_bdf = (filename[-4:].lower() in ['.edf', '.bdf'])
     if is_edf_bdf:
         try: 
@@ -76,7 +76,7 @@ def timeseries_from_file(filename):
         if is_edf_bdf:
             message += """\n(For EDF/BDF files, can instead install python-edf:
                        https://bitbucket.org/cleemesser/python-edf/ )"""
-        raise nsim.Error(message)
+        raise Error(message)
 
 
 def _load_biosig(filename):
@@ -102,7 +102,7 @@ def _load_biosig(filename):
         ar[:, i] = data.reshape((npoints, channels))[:, 0]
     biosig.sclose(hdr)
     biosig.destructHDR(hdr)
-    return nsim.Timeseries(ar, labels=[None, channelnames], fs=fs)
+    return Timeseries(ar, labels=[None, channelnames], fs=fs)
 
 
 def _load_edflib(filename):
@@ -117,9 +117,9 @@ def _load_edflib(filename):
     import edflib
     e = edflib.EDF(filename)
     if np.ptp(e.signal_nsamples) != 0:
-        raise nsim.Error('channels have differing numbers of samples')
+        raise Error('channels have differing numbers of samples')
     if np.ptp(e.samplefreqs) != 0:
-        raise nsim.Error('channels have differing sample rates')
+        raise Error('channels have differing sample rates')
     n = max(e.signal_nsamples)
     m = e.signals_in_file
     channelnames = e.signal_labels
@@ -132,4 +132,4 @@ def _load_edflib(filename):
     # double precision (64bit) is unnecessary use of memory. use 32 bit float:
     ar = ar.astype(np.float32)
     tspan = np.arange(0, (n - 1 + 0.5) * dt, dt, dtype=np.float32)
-    return nsim.Timeseries(ar, tspan, labels=[None, channelnames])
+    return Timeseries(ar, tspan, labels=[None, channelnames])
