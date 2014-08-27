@@ -13,7 +13,7 @@ classes:
 
 from __future__ import absolute_import
 import numpy as np
-from sys import hexversion
+from collections import Sequence
 import warnings
 import copy
 import types
@@ -23,6 +23,7 @@ import numbers
 _SliceType = type(slice(None))
 _EllipsisType = type(Ellipsis)
 _TupleType = type(())
+_NewaxisType = type(np.newaxis)
 
 warnings.filterwarnings('ignore', 'comparison to `None`', FutureWarning)
 
@@ -207,66 +208,182 @@ class Timeseries(np.ndarray):
         return super(Timeseries, self).__array_wrap__(out_arr, context)
 
     def __getitem__(self, index):
-        """When a Timeseries is sliced, tspan will be sliced in the 
-        same way as axis 0 of the Timeseries, and labels[i] will be sliced in 
+        """When a Timeseries is sliced, tspan will be sliced in the
+        same way as axis 0 of the Timeseries, and labels[i] will be sliced in
         the same way as axis i of the Timeseries.
-        If the resulting array is not a Timeseries (for example if the 
+        If the resulting array is not a Timeseries (for example if the
         time axis is sliced to a scalar value) then returns an ndarray.
         """
-        #TODO add support for using a multidimensional array as index
-        #print('In __getitem__, index is ' + str(index))
-        new_array = np.asarray(self).__getitem__(index)
         cur_labels = self.labels
-        cur_shape = self.shape
-        is_ts = True
-        if (isinstance(index, numbers.Integral) or 
-                isinstance(index, _SliceType) or
-                isinstance(index, _EllipsisType) or 
-                isinstance(index, np.ndarray) and index.ndim is 1):
-            new_tspan = self.tspan[index]
-            new_labels = cur_labels
-        elif isinstance(index, _TupleType):
-            if np.newaxis in index or Ellipsis in index:
-                index = copy.deepcopy(index)
-            if Ellipsis in index:
-                pos = index.index(Ellipsis)
-                while len(index) < self.ndim + index.count(np.newaxis):
-                    index = index[:pos] + (slice(None),)*2 + index[(pos+1):]
-            while np.newaxis in index:
-                pos = index.index(np.newaxis)
-                if pos is 0:
-                    is_ts = False # prepending an axis: no longer a timeseries
-                index = index[:pos] + (slice(None),) + index[(pos+1):]
-                cur_labels = cur_labels[:pos] + [None] + cur_labels[pos:]
-                cur_shape = cur_shape[:pos] + (1,) + cur_shape[pos:]
-            if self.tspan.shape is ():
-                is_ts = False
-            else:
-                new_tspan = self.tspan[index[0]]
-            if len(index) is 1:
-                new_labels = cur_labels
-            else:
-                new_labels = [None] # labels[0] is always None
-                for i in range(1, len(index)):
-                    # using temp ndarray of labels ensures consistent slicing
+        cur_shape = self.shape # current values, may be updated by np.newaxis
+        cur_ndim = self.ndim
+        new_array = np.asarray(self).__getitem__(index)
+        if isinstance(index, np.ndarray) and index.dtype.type is np.bool_:
+            raise Error('indexing by boolean array not yet implemented')
+        if not isinstance(index, Sequence):
+            index = (index,) + (slice(None),)*(self.ndim - 1)
+        ix_types = tuple(type(x) for x in index)
+        if (np.ndarray in ix_types or
+                (not isinstance(index, _TupleType) and
+                    _NewaxisType not in ix_types and
+                    _EllipsisType not in ix_types and
+                    _SliceType not in ix_types) or
+                any(issubclass(T, Sequence) for T in ix_types)):
+            basic_slicing = False
+        else:
+            basic_slicing = True
+        # Apply any ellipses
+        while _EllipsisType in ix_types:
+            pos = ix_types.index(_EllipsisType)
+            m = (self.ndim + ix_types.count(_NewaxisType) - len(index) + 1)
+            index = index[:pos] + (slice(None),)*m + index[(pos+1):]
+            ix_types = tuple(type(x) for x in index)
+        # Apply any np.newaxis
+        while _NewaxisType in ix_types:
+            pos = ix_types.index(type(np.newaxis))
+            if pos is 0:
+                # prepended an axis: no longer a Timeseries
+                return np.asarray(new_array)
+            index = index[:pos] + (slice(None),) + index[(pos+1):]
+            cur_labels = cur_labels[:pos] + [None] + cur_labels[pos:]
+            cur_shape = cur_shape[:pos] + (1,) + cur_shape[pos:]
+            cur_ndim = len(cur_shape)
+            ix_types = tuple(type(x) for x in index)
+        index = tuple(index) + (slice(None),)*(cur_ndim - len(index))
+        if len(index) > cur_ndim:
+            raise IndexError('too many indices for array')
+        if basic_slicing:
+            new_tspan = self.tspan[index[0]]
+            if not isinstance(new_tspan, np.ndarray) or new_tspan.shape is ():
+                # axis 0 has been sliced away: result is no longer a Timeseries
+                return np.asarray(new_array)
+            new_labels = [None]
+            for i in range(1, cur_ndim):
+                # make temp ndarray of labels to ensure correct slicing
+                if cur_labels[i] is None:
+                    labelarray = np.array([''] * cur_shape[i])
+                else:
+                    labelarray = np.array(cur_labels[i])
+                newlabelarray = labelarray[index[i]]
+                if newlabelarray.shape is not ():
                     if cur_labels[i] is None:
-                        labelarray = np.array([''] * cur_shape[i])
+                        new_labels.append(None)
                     else:
-                        labelarray = np.array(cur_labels[i])
-                    newlabelarray = labelarray[index[i]]
-                    if newlabelarray.shape is not ():
-                        if cur_labels[i] is None:
-                            new_labels.append(None)
-                        else:
-                            new_labels.append(list(newlabelarray))
-        elif index is None:
-            is_ts = False
-        if not isinstance(new_tspan, np.ndarray):
-            is_ts = False
-        if is_ts:
+                        new_labels.append(list(newlabelarray))
             return Timeseries(new_array, new_tspan, new_labels)
         else:
-            return np.asarray(new_array)
+            # advanced integer indexing
+            is_fancy = tuple(not isinstance(x, _SliceType) for x in index)
+            fancy_pos = tuple(i for i in range(len(index)) if is_fancy[i])
+            nonfancy_pos = tuple(
+                    i for i in range(len(index)) if not is_fancy[i])
+            contiguous = (fancy_pos[-1] - fancy_pos[0] == len(fancy_pos) - 1)
+            index = list(index)
+            ix_arrays = [index[i] for i in fancy_pos]
+            ix_arrays = np.broadcast_arrays(*ix_arrays)
+            for j in range(len(fancy_pos)):
+                index[fancy_pos[j]] = ix_arrays[j]
+            index = tuple(index)
+            ishape = index[fancy_pos[0]].shape # common shape all index arrays
+            idim = len(ishape)
+            assert(idim > 0)
+            new_tspan = None
+            if contiguous and not is_fancy[0]:
+                new_tspan = self.tspan[index[0]]
+                if (not isinstance(new_tspan, np.ndarray) or
+                        new_tspan.shape is ()):
+                    # axis 0 has been sliced away: no longer a Timeseries
+                    return np.asarray(new_array)
+            # compute labels for the nonfancy output axes
+            nonfancy_labels = []
+            nonfancy_retained = []
+            for i in nonfancy_pos:
+                # make temp ndarray of labels to ensure correct slicing
+                if cur_labels[i] is None:
+                    labelarray = np.array([''] * cur_shape[i])
+                else:
+                    labelarray = np.array(cur_labels[i])
+                newlabelarray = labelarray[index[i]]
+                if newlabelarray.shape is ():
+                    nonfancy_retained.append(False)
+                else:
+                    nonfancy_retained.append(True)
+                    if cur_labels[i] is None or len(newlabelarray) is 0:
+                        nonfancy_labels.append(None)
+                    else:
+                        nonfancy_labels.append(list(newlabelarray))
+            # compute labels for the fancy output axes:
+            #
+            # For each fancy output axis k, call input axis i a 'candidate'
+            # label source for k if k is the only nonconstant axis in the
+            # indexing array for i.
+            # We will give labels/tspan to output axis k from input axis i
+            # only if i is the sole candidate label source for k.
+            candidates = [[]] * idim
+            # candidates[k] will be a list of candidate label sources for k
+            for i in fancy_pos:
+                nonconstant_ix_axes = []
+                for k in range(idim):
+                    n = ishape[k]
+                    if n > 0:
+                        partix = np.split(index[i], n, axis=k)
+                        if not all(np.array_equal(
+                                partix[0], partix[q]) for q in range(1, n)):
+                            nonconstant_ix_axes.append(k)
+                if len(nonconstant_ix_axes) is 1:
+                    candidates[nonconstant_ix_axes[0]].append(i)
+            fancy_labels = []
+            for k in range(idim):
+                if len(candidates[k]) is 1:
+                    # then we can label this output axis
+                    label_source = candidates[k][0]
+                    if cur_labels[label_source] is None:
+                        labelarray = np.array([''] * cur_shape[label_source])
+                    else:
+                        labelarray = np.array(cur_labels[label_source])
+                    iix = [0] * idim
+                    iix[k] = slice(None)
+                    iix = tuple(iix)
+                    newlabelarray = labelarray[index[label_source][iix]]
+                    if newlabelarray.shape is not ():
+                        if cur_labels[label_source] is None:
+                            fancy_labels.append(None)
+                        else:
+                            fancy_labels.append(list(newlabelarray))
+                    if k is 0 and (is_fancy[0] or not contiguous):
+                        # then this output axis will be axis 0 of output
+                        if label_source is 0:
+                            new_tspan = self.tspan[index[0][iix]]
+                            if (not isinstance(new_tspan, np.ndarray) or
+                                    new_tspan.shape is ()):
+                                # axis 0 has been sliced away: not a Timeseries
+                                return np.asarray(new_array)
+                            if not np.all(np.diff(new_tspan) > 0):
+                                #tspan not monotonic increasing: not Timeseries
+                                return np.asarray(new_array)
+                        else:
+                            #axis 0 no longer represents time: not a Timeseries
+                            return np.asarray(new_array)
+                else:
+                    # not a 'sole candidate'
+                    fancy_labels.append(None)
+            if contiguous:
+                # fancy output axes are put where the fancy input axes were:
+                new_labels = []
+                for i in range(0, fancy_pos[0]):
+                    if nonfancy_retained.pop(0):
+                        new_labels.append(nonfancy_labels.pop(0))
+                new_labels.extend(fancy_labels)
+                for i in range(fancy_pos[-1] + 1, cur_ndim):
+                    if nonfancy_retained.pop(0):
+                        new_labels.append(nonfancy_labels.pop(0))
+            else:
+                # not contiguous. fancy output axes move to the start:
+                new_labels = fancy_labels + nonfancy_labels
+            if new_tspan is None:
+                return np.asarray(new_array)
+            else:
+                return Timeseries(new_array, new_tspan, new_labels)
 
     def __setitem__(self, index, value):
         #print('in __setitem__')
