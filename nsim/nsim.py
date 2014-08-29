@@ -55,11 +55,6 @@ class SimValueError(Error):
     pass
 
 
-class SimClusterError(Error):
-    """Thrown if there is a problem using the cluster that we can't fix"""
-    pass
-
-
 @distob.proxy_methods(Timeseries, include_underscore=(
     '__getitem__', '__setitem__', '__getslice__', '__setslice__'))
 class RemoteTimeseries(distob.RemoteArray, object):
