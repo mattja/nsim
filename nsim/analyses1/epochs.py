@@ -301,7 +301,7 @@ def epochs_distributed(ts, variability=None, threshold=0.0, minlength=1.0,
     else:
         calcs = [_EpochCalc(ts[:, i], variability[:, i], 
                             threshold, minlength) for i in range(channels)]
-    distob.scatter(calcs)
+    calcs = distob.scatter(calcs)
     results = distob.call_all(calcs, 'epochs')
     vars, allchannels_epochs = zip(*results)
     variability = np.hstack(vars)

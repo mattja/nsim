@@ -36,11 +36,18 @@ import distob
 from scipy import stats
 from scipy import integrate
 import numpy as np
+from collections import Sequence
 import copy
 import types
 import numbers
 import random
 #from memory_profiler import profile
+
+# types for compatibility across python 2 and 3
+_SliceType = type(slice(None))
+_EllipsisType = type(Ellipsis)
+_TupleType = type(())
+_NewaxisType = type(np.newaxis)
 
 
 class Error(Exception):
@@ -79,11 +86,449 @@ class RemoteTimeseries(distob.RemoteArray, object):
             self._fetch()
             return self._obcache.psd(plot=True)
 
+    def concatenate(self, tup, axis=0):
+        if not isinstance(tup, Sequence):
+            tup = (tup,)
+        if tup is (None,) or len(tup) is 0:
+            return self
+        new_array = super(RemoteTimeseries, self).concatenate(tup, axis)
+        tup = (self,) + tuple(tup)
+        if not all(hasattr(ts, 'tspan') and
+                   hasattr(ts, 'labels') for ts in tup):
+            return new_array
+        if axis == 0:
+            starts = [ts.tspan[0] for ts in tup]
+            ends = [ts.tspan[-1] for ts in tup]
+            if not all(starts[i] > ends[i-1] for i in range(1, len(starts))):
+                # series being joined are not ordered in time. not a Timeseries
+                return new_array
+            else:
+                new_tspan = np.concatenate([ts.tspan for ts in tup])
+        else:
+            new_tspan = self.tspan
+        new_labels = [None]
+        for ax in range(1, new_array.ndim):
+            if ax == axis:
+                axislabels = []
+                for ts in tup:
+                    if ts.labels[axis] is None:
+                        axislabels.extend('' * ts.shape[axis])
+                    else:
+                        axislabels.extend(ts.labels[axis])
+                if all(lab == '' for lab in axislabels):
+                    new_labels.append(None)
+                else:
+                    new_labels.append(axislabels)
+            else:
+                # non-concatenation axis
+                axlabels = tup[0].labels[ax]
+                if not all(ts.labels[ax] == axlabels for ts in tup[1:]):
+                    # series to be joined do not agree on labels for this axis
+                    axlabels = None
+                new_labels.append(axlabels)
+        if isinstance(new_array, RemoteArray):
+            # TODO: could have kept tspan and labels remote in this case
+            return __rts_from_ra(new_array, new_tspan, new_labels)
+        else:
+            assert(isinstance(new_array, DistArray))
+            return __dts_from_da(new_array, new_tspan, new_labels)
+
 
 @distob.proxy_methods(_Timeslice, include_underscore=(
     '__getitem__', '__setitem__', '__getslice__', '__setslice__', '__repr__'))
 class Remote_Timeslice(distob.Remote, object):
     pass
+
+
+class DistTimeseries(distob.DistArray):
+    """a Timeseries with one axis distributed onto multiple computing engines.
+
+    For example, a multi-channel timeseries could be distributed so that each
+    channel is held on a different computer (for parallel computation)
+
+    Currently only a non-time axis can be distributed.
+    """
+    # TODO: consider refactoring as __getitem__ and __repr__ share much logic
+    #   with the Timeseries class
+    def __init__(self, subts, axis=None, axislabels=None):
+        """Make a DistTimeseries from a list of existing remote Timeseries
+
+        Args:
+          subts (list of RemoteTimeseries, or list of Ref to Timeseries): 
+            the sub-timeseries (possibly remote) which together will form the
+            DistTimeseries when joined. These must all have the same 
+            time points, shape and dtype.
+
+          axis (int, optional): Position of the distributed axis. Cannot be 0,
+            that is, we currently only allow a non-time axis to be distributed.
+            If n Timeseries are given, each of shape (i1, i2, ..., iK),
+            and `axis` is not given, the resulting DistTimeseries will have
+            shape (i1, i2, ..., iK, n). But if `axis` is given then the
+            sub-series will be concatenated along a new axis in position `axis`
+
+          axislabels (list of str, optional): names to label each position 
+            along the new distributed axis. e.g. ['node1', ..., 'nodeN']
+        """
+        if axis == 0:
+            raise SimValueError(u'Currently cannot distribute the time axis')
+        if axislabels is not None and not isinstance(axislabels, Sequence):
+            raise SimValueError(u'axislabels should be a list of str')
+        if axislabels is not None and len(axislabels) != len(subts):
+            raise SimValueError(u'mismatch: %d subarrays but %d axislabels' % (
+                len(subts), len(axislabels)))
+        super(DistTimeseries, self).__init__(subts, axis)
+        self.tspan = distob.gather(self._subarrays[0].tspan)
+        # Expensive to validate all tspans are the same. check start and end t
+        # (TODO: in Timeseries class make special case for constant timestep)
+        starts = [rts.tspan[0] for rts in self._subarrays]
+        ends = [rts.tspan[-1] for rts in self._subarrays]
+        if (not all(t == self.tspan[0] for t in starts) or 
+                not all(t == self.tspan[-1] for t in ends)):
+            raise SimValueError(u'timeseries must use the same time points')
+        nlabels = [rts.labels for rts in self._subarrays]
+        self.labels = [None]
+        # only give labels to an axis if all sub-timeseries agree
+        for i in range(1, self.ndim - 1):
+            if len(set(labels[i] for labels in nlabels)) is 1:
+                self.labels.append(nlabels[0][i])
+            else:
+                self.labels.append(None)
+        self.labels.insert(self._distaxis, axislabels)
+        self.t = _Timeslice(self)
+
+    def __getitem__(self, index):
+        """Slice the distributed timeseries"""
+        ar = super(DistTimeseries, self).__getitem__(index)
+        if (isinstance(ar, RemoteTimeseries) or 
+                isinstance(ar, distob.RemoteArray)):
+            # slicing result is no longer distributed
+            return ar
+        # otherwise `ar` is a DistArray
+        if not isinstance(ar._subarrays[0], RemoteTimeseries):
+            return ar
+        cur_labels = self.labels
+        cur_shape = self.shape # current values, may be updated by np.newaxis
+        cur_ndim = self.ndim
+        if isinstance(index, np.ndarray) and index.dtype.type is np.bool_:
+            raise Error('indexing by boolean array not yet implemented')
+        if not isinstance(index, Sequence):
+            index = (index,) + (slice(None),)*(self.ndim - 1)
+        ix_types = tuple(type(x) for x in index)
+        if (np.ndarray in ix_types or
+                (not isinstance(index, _TupleType) and
+                    _NewaxisType not in ix_types and
+                    _EllipsisType not in ix_types and
+                    _SliceType not in ix_types) or
+                any(issubclass(T, Sequence) for T in ix_types)):
+            basic_slicing = False
+        else:
+            basic_slicing = True
+        # Apply any ellipses
+        while _EllipsisType in ix_types:
+            pos = ix_types.index(_EllipsisType)
+            m = (self.ndim + ix_types.count(_NewaxisType) - len(index) + 1)
+            index = index[:pos] + (slice(None),)*m + index[(pos+1):]
+            ix_types = tuple(type(x) for x in index)
+        # Apply any np.newaxis
+        while _NewaxisType in ix_types:
+            pos = ix_types.index(type(np.newaxis))
+            if pos is 0:
+                # prepended an axis: no longer a Timeseries
+                return ar
+            index = index[:pos] + (slice(None),) + index[(pos+1):]
+            cur_labels = cur_labels[:pos] + [None] + cur_labels[pos:]
+            cur_shape = cur_shape[:pos] + (1,) + cur_shape[pos:]
+            cur_ndim = len(cur_shape)
+            ix_types = tuple(type(x) for x in index)
+        index = tuple(index) + (slice(None),)*(cur_ndim - len(index))
+        if len(index) > cur_ndim:
+            raise IndexError('too many indices for array')
+        if basic_slicing:
+            new_tspan = self.tspan[index[0]]
+            if not isinstance(new_tspan, np.ndarray) or new_tspan.shape is ():
+                # axis 0 has been sliced away: result is no longer a Timeseries
+                return ar
+            new_labels = [None]
+            for i in range(1, cur_ndim):
+                # make temp ndarray of labels to ensure correct slicing
+                if cur_labels[i] is None:
+                    labelarray = np.array([''] * cur_shape[i])
+                else:
+                    labelarray = np.array(cur_labels[i])
+                newlabelarray = labelarray[index[i]]
+                if newlabelarray.shape is not ():
+                    if cur_labels[i] is None:
+                        new_labels.append(None)
+                    else:
+                        new_labels.append(list(newlabelarray))
+            new_subts = ar._subarrays
+            new_distaxis = ar._distaxis
+            new_axislabels = new_labels[ar._distaxis]
+            return DistTimeseries(new_subts, new_distaxis, new_axislabels)
+        else:
+            # advanced integer indexing
+            is_fancy = tuple(not isinstance(x, _SliceType) for x in index)
+            fancy_pos = tuple(i for i in range(len(index)) if is_fancy[i])
+            nonfancy_pos = tuple(
+                    i for i in range(len(index)) if not is_fancy[i])
+            contiguous = (fancy_pos[-1] - fancy_pos[0] == len(fancy_pos) - 1)
+            index = list(index)
+            ix_arrays = [index[i] for i in fancy_pos]
+            ix_arrays = np.broadcast_arrays(*ix_arrays)
+            for j in range(len(fancy_pos)):
+                index[fancy_pos[j]] = ix_arrays[j]
+            index = tuple(index)
+            ishape = index[fancy_pos[0]].shape # common shape all index arrays
+            idim = len(ishape)
+            assert(idim > 0)
+            new_tspan = None
+            if contiguous and not is_fancy[0]:
+                new_tspan = self.tspan[index[0]]
+                if (not isinstance(new_tspan, np.ndarray) or
+                        new_tspan.shape is ()):
+                    # axis 0 has been sliced away: no longer a Timeseries
+                    return ar
+            # compute labels for the nonfancy output axes
+            nonfancy_labels = []
+            nonfancy_retained = []
+            for i in nonfancy_pos:
+                # make temp ndarray of labels to ensure correct slicing
+                if cur_labels[i] is None:
+                    labelarray = np.array([''] * cur_shape[i])
+                else:
+                    labelarray = np.array(cur_labels[i])
+                newlabelarray = labelarray[index[i]]
+                if newlabelarray.shape is ():
+                    nonfancy_retained.append(False)
+                else:
+                    nonfancy_retained.append(True)
+                    if cur_labels[i] is None or len(newlabelarray) is 0:
+                        nonfancy_labels.append(None)
+                    else:
+                        nonfancy_labels.append(list(newlabelarray))
+            # compute labels for the fancy output axes:
+            #
+            # For each fancy output axis k, call input axis i a 'candidate'
+            # label source for k if k is the only nonconstant axis in the
+            # indexing array for i.
+            # We will give labels/tspan to output axis k from input axis i
+            # only if i is the sole candidate label source for k.
+            candidates = [[]] * idim
+            # candidates[k] will be a list of candidate label sources for k
+            for i in fancy_pos:
+                nonconstant_ix_axes = []
+                for k in range(idim):
+                    n = ishape[k]
+                    if n > 0:
+                        partix = np.split(index[i], n, axis=k)
+                        if not all(np.array_equal(
+                                partix[0], partix[q]) for q in range(1, n)):
+                            nonconstant_ix_axes.append(k)
+                if len(nonconstant_ix_axes) is 1:
+                    candidates[nonconstant_ix_axes[0]].append(i)
+            fancy_labels = []
+            for k in range(idim):
+                if len(candidates[k]) is 1:
+                    # then we can label this output axis
+                    label_source = candidates[k][0]
+                    if cur_labels[label_source] is None:
+                        labelarray = np.array([''] * cur_shape[label_source])
+                    else:
+                        labelarray = np.array(cur_labels[label_source])
+                    iix = [0] * idim
+                    iix[k] = slice(None)
+                    iix = tuple(iix)
+                    newlabelarray = labelarray[index[label_source][iix]]
+                    if newlabelarray.shape is not ():
+                        if cur_labels[label_source] is None:
+                            fancy_labels.append(None)
+                        else:
+                            fancy_labels.append(list(newlabelarray))
+                    if k is 0 and (is_fancy[0] or not contiguous):
+                        # then this output axis will be axis 0 of output
+                        if label_source is 0:
+                            new_tspan = self.tspan[index[0][iix]]
+                            if (not isinstance(new_tspan, np.ndarray) or
+                                    new_tspan.shape is ()):
+                                # axis 0 has been sliced away: not a Timeseries
+                                return ar
+                            if not np.all(np.diff(new_tspan) > 0):
+                                #tspan not monotonic increasing: not Timeseries
+                                return ar
+                        else:
+                            #axis 0 no longer represents time: not a Timeseries
+                            return ar
+                else:
+                    # not a 'sole candidate'
+                    fancy_labels.append(None)
+            if contiguous:
+                # fancy output axes are put where the fancy input axes were:
+                new_labels = []
+                for i in range(0, fancy_pos[0]):
+                    if nonfancy_retained.pop(0):
+                        new_labels.append(nonfancy_labels.pop(0))
+                new_labels.extend(fancy_labels)
+                for i in range(fancy_pos[-1] + 1, cur_ndim):
+                    if nonfancy_retained.pop(0):
+                        new_labels.append(nonfancy_labels.pop(0))
+            else:
+                # not contiguous. fancy output axes move to the start:
+                new_labels = fancy_labels + nonfancy_labels
+            if new_tspan is None:
+                return ar
+            else:
+                new_subts = ar._subarrays
+                new_distaxis = ar._distaxis
+                new_axislabels = new_labels[ar._distaxis]
+                return DistTimeseries(new_subts, new_distaxis, new_axislabels)
+
+    def __repr__(self):
+        classname = self.__class__.__name__
+        super_classname = super(DistTimeseries, self).__class__.__name__
+        if self.tspan.shape is ():
+            first = last = self.tspan
+        else:
+            first = self.tspan[0]
+            last = self.tspan[-1]
+        head = (u'<%s of shape %s from time %f to %f '
+                 'with axis %d distributed>:\n') % (
+                     classname, self.shape, first, last, self._distaxis)
+        repr_tspan = 'tspan=' + repr(self.tspan)
+        if len(repr_tspan) > 160:
+            repr_tspan = 'tspan=array([ %f, ..., %f ])' % (first, last)
+        # reuse DistArray repr, but replacing the heading:
+        content = super(DistTimeseries, self).__repr__()
+        first_newline = content.index('\n')
+        content = content[(first_newline + 1):]
+        content = content.replace(super_classname, classname, 1)
+        content = content.rstrip(')') + ', \n' + repr_tspan
+        if all(l is None for l in self.labels):
+            labelsrep = ''
+        else:
+            labelsrep = ', \nlabels=' + repr(self.labels)
+        return head + content + labelsrep + ')'
+
+    @classmethod
+    def __distob_vectorize__(cls, f):
+        """Upgrades a normal function f to act on a DistTimeseries in parallel
+
+        Args:
+          f (callable): ordinary function which expects as its first
+            argument a Timeseries (of the same shape as our subarrays)
+
+        Returns:
+          vf (callable): new function that takes a DistTimeseries as its first
+            argument. ``vf(dist_timeseries)`` will do the computation ``f(ts)``
+            on each sub-timeseries in parallel and if possible will return the
+            results as a DistTimeseries or DistArray. (or if the results are
+            not arrays, will return a list with the result for each
+            sub-timeseries)
+        """
+        def vf(self, *args, **kwargs):
+            refs = [ra._ref for ra in self._subarrays]
+            dv = distob.engine._client[:]
+            def remote_f(object_id, *args, **kwargs):
+                result = f(distob.engine[object_id], *args, **kwargs)
+                if type(result) in distob.engine.proxy_types:
+                    return distob.Ref(result)
+                else:
+                    return result
+            results = []
+            for ref in refs:
+                dv.targets = ref.engine_id
+                ar = dv.apply_async(remote_f, ref.object_id, *args, **kwargs)
+                results.append(ar)
+            for i in range(len(results)):
+                ar = results[i]
+                ar.wait()
+                results[i] = ar.r
+                if isinstance(results[i], distob.Ref):
+                    ref = results[i]
+                    RemoteClass = distob.engine.proxy_types[ref.type]
+                    results[i] = RemoteClass(ref)
+            if (all(isinstance(r, distob.RemoteArray) for r in results) and
+                    all(r.shape == results[0].shape for r in results)):
+                # Then we can join the results and return a DistArray.
+                # We will keep the same axis distributed as in the input,
+                # unless the results have more dimensions than the input.
+                res_subshape = results[0].shape
+                if len(res_subshape) > self.ndim - 1:
+                    res_distaxis = len(res_subshape)
+                else:
+                    res_distaxis = self._distaxis
+                newaxes = res_distaxis - len(res_subshape)
+                if newaxes >= 1:
+                    ix = ((slice(None),) * len(res_subshape) + 
+                          (np.newaxis,) * newaxes)
+                    results = [r[ix] for r in results]
+                if all(isinstance(r, RemoteTimeseries) for r in results):
+                    axlabels = self.labels[self._distaxis]
+                    try:
+                       return DistTimeseries(results, res_distaxis, axlabels)
+                    except SimValueError:
+                        pass
+                return distob.DistArray(results, res_distaxis)
+            else:
+                return results
+        if hasattr(f, '__name__'):
+            vf.__name__ = 'v' + f.__name__
+            f_str = f.__name__ + '()'
+        else:
+            f_str = 'callable'
+        doc = u"""Apply %s in parallel to a DistTimeseries\n
+               Args:
+                 dts (DistTimeseries)
+                 other args are the same as for %s
+               """ % (f_str, f_str)
+        if hasattr(f, '__doc__') and f.__doc__ is not None:
+            doc = doc.rstrip() + (' detailed below:\n----------\n' + f.__doc__)
+        vf.__doc__ = doc
+        return vf
+
+    def expand_dims(self, axis):
+        """Insert a new axis, at a given position in the array shape
+        Args:
+          axis (int): Position (amongst axes) where new axis is to be inserted.
+        """
+        if axis <= self._distaxis:
+            subaxis = axis
+            new_distaxis = self._distaxis + 1
+        else:
+            subaxis = axis - 1
+            new_distaxis = self._distaxis
+        new_subts = [expand_dims(rts, subaxis) for rts in self._subarrays]
+        if axis == 0:
+            # prepended an axis: no longer a Timeseries
+            return distob.DistArray(new_subts, new_distaxis)
+        else:
+            axislabels = self.labels[self._distaxis]
+            return DistTimeseries(new_subts, new_distaxis, axislabels)
+
+
+def __rts_from_ra(ra, tspan, labels):
+    """construct a RemoteTimeseries from a RemoteArray"""
+    eng_id = ra._ref.engine_id
+    dv = distob.engine._client[eng_id]
+    def remote_convert(ra_id, tspan, labels):
+        from distob import engine
+        from nsim import Timeseries
+        array = engine[ra_id]
+        ts = Timeseries(array, tspan, labels)
+        return Ref(ts)
+    ref = dv.apply_sync(remote_convert, ra._ref.object_id, tspan, labels)
+    return RemoteTimeseries(ref)
+
+
+def __dts_from_da(da, tspan, labels):
+    """construct a DistTimeseries from a DistArray whose subarrays are already
+    RemoteTimeseries 
+    """
+    assert(all(isinstance(ra, RemoteTimeseries) for ra in da._subarrays))
+    da.__class__ = DistTimeseries
+    da.tspan = tspan
+    da.labels = labels
+    da.t = _Timeslice(da)
+    return da
 
 
 class Model(object):
@@ -251,7 +696,8 @@ class MultipleSim(object):
     Like a list, indexing with [i] gives access to the ith simulation
 
     Attributes:
-      sims: list of simulations
+      timeseries: resulting timeseries: all variables of all simulations
+      output: resulting timeseries: output variables of all simulations
     """
     def __init__(self, systems, T=60.0, dt=0.005):
         """
@@ -262,8 +708,7 @@ class MultipleSim(object):
         """
         self.T = T
         self.dt = dt
-        self.sims = [Simulation(s, T, dt) for s in systems]
-        distob.scatter(self.sims)
+        self.sims = distob.scatter([Simulation(s, T, dt) for s in systems])
         for s in self.sims:
             s.compute()
 
@@ -276,6 +721,37 @@ class MultipleSim(object):
     def _repr_pretty_(self, p, cycle):
         return p.pretty(self.sims)
 
+    def _node_labels(self):
+        return ['node %d' % i for i in range(len(self.sims))]
+
+    def __get_timeseries(self):
+        subts = [s.timeseries for s in self.sims]
+        sub_ndim = subts[0].ndim
+        if sub_ndim is 1:
+            subts = [distob.expand_dims(rts, 1) for rts in subts]
+            sub_ndim += 1
+        distaxis = sub_ndim
+        return DistTimeseries(subts, distaxis, self._node_labels())
+
+    timeseries = property(fget=__get_timeseries, doc="Rank 3 array representing"
+        " multiple time series. 1st axis is time, 2nd axis ranges across all"
+        " dynamical variables in a single simulation, 3rd axis ranges across"
+        " different simulation instances.")
+
+    def __get_output(self):
+        subts = [s.output for s in self.sims]
+        sub_ndim = subts[0].ndim
+        if sub_ndim is 1:
+            subts = [distob.expand_dims(rts, 1) for rts in subts]
+            sub_ndim += 1
+        distaxis = sub_ndim
+        return DistTimeseries(subts, distaxis, self._node_labels())
+
+    output = property(fget=__get_output, doc="Rank 3 array representing"
+        " output time series. 1st axis is time, 2nd axis ranges across"
+        " output variables of a single simulation, 3rd axis ranges across"
+        " different simulation instances.")
+
 
 class RepeatedSim(MultipleSim):
     """Independent simulations of the same model multiple times, with results.
@@ -283,7 +759,6 @@ class RepeatedSim(MultipleSim):
     Like a list, indexing the object with [i] gives access to the ith simulation
 
     Attributes:
-      sims: the individual simulations
       modelclass: the Model class common to all the simulations
       timeseries: resulting timeseries: all variables of all simulations
       output: resulting timeseries: output variables of all simulations
@@ -314,36 +789,8 @@ class RepeatedSim(MultipleSim):
             systems = [self.modelclass() for i in range(repeat)]
         super(RepeatedSim, self).__init__(systems, T, dt)
 
-    def __get_timeseries(self):
-        ndim = self.sims[0].timeseries.ndim
-        if ndim is 1:
-            array = np.dstack(
-                tuple(np.expand_dims(s.timeseries, 1) for s in self.sims))
-        else:
-            array = np.concatenate(
-                tuple(np.expand_dims(s.timeseries, ndim) for s in self.sims), 
-                ndim)
-        return Timeseries(array, self.sims[0].timeseries.tspan)
-
-    timeseries = property(fget=__get_timeseries, doc="Rank 3 array representing"
-        " multiple time series. 1st axis is time, 2nd axis ranges across all"
-        " dynamical variables in a single simulation, 3rd axis ranges across"
-        " different simulation instances.")
-
-    def __get_output(self):
-        ndim = self.sims[0].output.ndim
-        if ndim is 1:
-            array = np.dstack(
-                tuple(np.expand_dims(s.output, 1) for s in self.sims))
-        else:
-            array = np.concatenate(
-                tuple(np.expand_dims(s.output, ndim) for s in self.sims), ndim)
-        return Timeseries(array, self.sims[0].output.tspan)
-
-    output = property(fget=__get_output, doc="Rank 3 array representing"
-        " output time series. 1st axis is time, 2nd axis ranges across"
-        " output variables of a single simulation, 3rd axis ranges across"
-        " different simulation instances.")
+    def _node_labels(self):
+        return ['repetition %d' % i for i in range(len(self.sims))]
 
 
 class ParameterSim(MultipleSim):

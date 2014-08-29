@@ -7,7 +7,7 @@ Timeseries.add_analyses(analyses1)
 from .nsim import (
         Model, ODEModel, SDEModel, DelaySDEModel, Simulation, 
         MultipleSim, RepeatedSim, ParameterSim, NetworkSim, newmodel, newsim, 
-        Error, SimTypeError, SimValueError)
+        DistTimeseries, Error, SimTypeError, SimValueError)
 from . import models, sde
 from .readfile import timeseries_from_mat, timeseries_from_file
 

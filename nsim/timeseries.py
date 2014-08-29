@@ -214,10 +214,10 @@ class Timeseries(np.ndarray):
         If the resulting array is not a Timeseries (for example if the
         time axis is sliced to a scalar value) then returns an ndarray.
         """
+        new_array = np.asarray(self).__getitem__(index)
         cur_labels = self.labels
         cur_shape = self.shape # current values, may be updated by np.newaxis
         cur_ndim = self.ndim
-        new_array = np.asarray(self).__getitem__(index)
         if isinstance(index, np.ndarray) and index.dtype.type is np.bool_:
             raise Error('indexing by boolean array not yet implemented')
         if not isinstance(index, Sequence):
@@ -428,6 +428,18 @@ class Timeseries(np.ndarray):
         super(Timeseries, self).__setstate__(tsstate[0])
         self.__dict__.update(tsstate[1])
 
+    def __distob_scatter__(self, axis=None):
+        """Turn a Timeseries into a distributed timeseries"""
+        if axis is None:
+            axis = self.ndim - 1
+        if axis == 0:
+            raise ValueError(u'Currently cannot distribute the time axis')
+        import distob
+        from nsim import DistTimeseries
+        axlabels = self.labels[axis]
+        dar = distob.distob._scatter_ndarray(self, axis)
+        return DistTimeseries([rts for rts in dar._subarrays], axis, axlabels)
+
     def angle(self, deg=0):
         return Timeseries(np.angle(self, deg=deg), self.tspan, self.labels)
 
@@ -537,6 +549,89 @@ class Timeseries(np.ndarray):
             raise ValueError('Timeseries to merge must have compatible shapes')
         indices = np.vstack((self.tspan, ts.tspan)).argsort()
         return np.vstack((self, ts))[indices]
+
+    def expand_dims(self, axis):
+        """Insert a new axis, at a given position in the array shape
+        Args:
+          axis (int): Position (amongst axes) where new axis is to be inserted.
+        """
+        array = np.expand_dims(self, axis)
+        if axis == 0:
+            # prepended an axis: no longer a Timeseries
+            return array
+        else:
+            new_labels = self.labels.insert(axis, None)
+            return Timeseries(array, self.tspan, new_labels)
+
+    def concatenate(self, tup, axis=0):
+        """Join a sequence of Timeseries to this one
+        Args: 
+          tup (sequence of Timeseries): timeseries to be joined with this one.
+            They must have the same shape as this Timeseries, except in the
+            dimension corresponding to `axis`.
+          axis (int, optional): The axis along which timeseries will be joined.
+        Returns:
+          res (Timeseries or ndarray)
+        """
+        if not isinstance(tup, Sequence):
+            tup = (tup,)
+        if tup is (None,) or len(tup) is 0:
+            return self
+        tup = (self,) + tuple(tup)
+        new_array = np.concatenate(tup, axis)
+        if not all(hasattr(ts, 'tspan') and 
+                   hasattr(ts, 'labels') for ts in tup):
+            return new_array
+        if axis == 0:
+            starts = [ts.tspan[0] for ts in tup]
+            ends = [ts.tspan[-1] for ts in tup]
+            if not all(starts[i] > ends[i-1] for i in range(1, len(starts))):
+                # series being joined are not ordered in time. not Timeseries
+                return new_array
+            else:
+                new_tspan = np.concatenate([ts.tspan for ts in tup])
+        else:
+            new_tspan = self.tspan
+        new_labels = [None]
+        for ax in range(1, new_array.ndim):
+            if ax == axis:
+                axislabels = []
+                for ts in tup:
+                    if ts.labels[axis] is None:
+                        axislabels.extend('' * ts.shape[axis])
+                    else:
+                        axislabels.extend(ts.labels[axis])
+                if all(lab == '' for lab in axislabels):
+                    new_labels.append(None)
+                else:
+                    new_labels.append(axislabels)
+            else:
+                # non-concatenation axis
+                axlabels = tup[0].labels[ax]
+                if not all(ts.labels[ax] == axlabels for ts in tup[1:]):
+                    # series to be joined do not agree on labels for this axis
+                    axlabels = None
+                new_labels.append(axlabels)
+        return self.__new__(self.__class__, new_array, new_tspan, new_labels)
+
+    def split(self, indices_or_sections, axis=0):
+        """Split a timeseries into multiple sub-timeseries"""
+        if not isinstance(indices_or_sections, numbers.Integral):
+            raise Error('splitting by array of indices is not yet implemented')
+        n = indices_or_sections
+        if self.shape[axis] % n != 0:
+            raise ValueError("Array split doesn't result in an equal division")
+        step = self.shape[axis] / n
+        pieces = []
+        start = 0
+        while start < self.shape[axis]:
+            stop = start + step
+            ix = [slice(None)] * self.ndim
+            ix[axis] = slice(start, stop)
+            ix = tuple(ix)
+            pieces.append(self[ix])
+            start += step
+        return pieces
 
 
 class _Timeslice(object):

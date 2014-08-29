@@ -247,8 +247,7 @@ def cwt_distributed(ts, freqs=np.logspace(0, 2), wavelet=cwtmorlet, plot=True):
     fs = (len(ts) - 1.0) / (1.0*ts.tspan[-1] - ts.tspan[0])
     dtype = wavelet(fs/freqs[0], fs/freqs[0]).dtype
     coefs = np.zeros((len(ts), len(freqs), channels), dtype)
-    ts_list = [ts[:, i] for i in range(channels)]
-    distob.scatter(ts_list)
+    ts_list = distob.scatter([ts[:, i] for i in range(channels)])
     coefs_list = distob.call_all(ts_list, 'cwt', freqs, wavelet, plot=False)
     for i in range(channels):
         coefs[:, :, i] = coefs_list[i] 
