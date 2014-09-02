@@ -1,8 +1,1 @@
-These are analyses that apply to a MultipleSimulation instance.
-
-
-Note: 
-Once the `distob.DistArray` distributed array class is implemented, 
-these can be removed. 
-Instead there will be analyses acting on a distributed timeseries object
-representing the output of all nodes of the MultipleSimulation.
+These are analyses that apply to a DistTimeseries

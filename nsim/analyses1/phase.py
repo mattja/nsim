@@ -67,7 +67,10 @@ def crossing_indices(ts, phi=0.0):
     # Select those zero-crossings separated by at least one pi-crossing
     splice = np.searchsorted(pc, zc)
     which_zc = np.r_[np.array([0]), np.nonzero(splice[0:-1] - splice[1:])[0] +1]
-    return zc[which_zc]
+    if zc.shape[0] is 0:
+        return zc
+    else:
+        return zc[which_zc]
     
 
 def periods(ts, phi=0.0):

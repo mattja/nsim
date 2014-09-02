@@ -22,6 +22,9 @@ Classes:
 ``ParameterSim``  multiple simulations of a model exploring parameter space
 ``NetworkSim``    simulate many instances of a model coupled in a network
 
+``RemoteTimeseries`` Local proxy representing a Timeseries on a remote engine 
+``DistTimeseries`` Timeseries with one axis distributed onto multiple engines 
+
 functions:
 ----------
 ``newmodel()``  Create a new model class dynamically at runtime
@@ -62,7 +65,7 @@ class SimValueError(Error):
     pass
 
 
-@distob.proxy_methods(Timeseries, include_underscore=(
+@distob.proxy_methods(Timeseries, exclude=('dtype',), include_underscore=(
     '__getitem__', '__setitem__', '__getslice__', '__setslice__'))
 class RemoteTimeseries(distob.RemoteArray, object):
     """Local object representing a Timeseries that may be local or remote"""
@@ -195,6 +198,50 @@ class DistTimeseries(distob.DistArray):
                 self.labels.append(None)
         self.labels.insert(self._distaxis, axislabels)
         self.t = _Timeslice(self)
+
+    @classmethod
+    def add_analyses(cls, source, vectorize=False):
+        """Dynamically add new analysis methods to the DistTimeseries class.
+        Args:
+          source: Can be a function, module or the filename of a python file.
+            If a filename or a module is given, then all functions defined 
+            inside not starting with _ will be added as methods.
+          vectorize (bool): Whether to apply `distob.vectorize()` to the 
+            function before making it a method of DistTimeseries.
+
+        The only restriction on the functions is that they can accept a 
+        Timeseries as their first argument.
+        """
+        if isinstance(source, types.FunctionType):
+            if vectorize:
+                source = distob.vectorize(source)
+            setattr(cls, source.__name__, source)
+        else:
+            if isinstance(source, types.ModuleType):
+                mod = source
+            elif isinstance(source, types.StringTypes):
+                import os
+                import imp
+                path = os.path.abspath(source)
+                if os.path.isfile(path) and path[-3:] == '.py':
+                    dir, file = os.path.split(path)
+                    name = file[:-3]
+                    module_info = imp.find_module(name, [dir])
+                    mod = imp.load_module('nsim.' + name, *module_info)
+                elif (os.path.isdir(path) and 
+                        '__init__.py' in os.listdir(path)):
+                    module_info = imp.find_module('__init__', [path])
+                    name = os.path.basename(path)
+                    mod = imp.load_module('nsim.' + name, *module_info)
+                else:
+                    raise Error('"%s" is not a file or directory' % source)
+            else:
+                raise ValueError('`source` argument not a function or module')
+            for name, obj in mod.__dict__.items():
+                if name[0] != '_' and isinstance(obj, types.FunctionType):
+                    if vectorize:
+                        obj = distob.vectorize(obj)
+                    setattr(cls, name, obj)
 
     def __getitem__(self, index):
         """Slice the distributed timeseries"""
@@ -679,17 +726,7 @@ class RemoteSimulation(distob.Remote, Simulation):
             distob.engine[sim_id].compute()
         self._dv.apply_async(remote_compute, self._id)
 
-def _with_plugins(plugin_module):
-    """class decorator. Make methods from the functions in plugin_module"""
-    def modify_class(cls):
-        for name in plugin_module.__dict__:
-            if isinstance(plugin_module.__dict__[name], types.FunctionType):
-                setattr(cls, name, plugin_module.__dict__[name])
-        return cls
-    return modify_class
 
-
-@_with_plugins(analysesN)
 class MultipleSim(object):
     """Represents multiple simulations, possibly running on different hosts
 

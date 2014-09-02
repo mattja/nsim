@@ -240,17 +240,11 @@ def cwt_distributed(ts, freqs=np.logspace(0, 2), wavelet=cwtmorlet, plot=True):
     Returns: 
       coefs: Continuous wavelet transform output array, shape (n,len(freqs),m)
     """
-    import distob
     if ts.ndim is 1 or ts.shape[1] is 1:
-        return roughcwt(ts, freqs, wavelet, plot)
-    channels = ts.shape[1]
-    fs = (len(ts) - 1.0) / (1.0*ts.tspan[-1] - ts.tspan[0])
-    dtype = wavelet(fs/freqs[0], fs/freqs[0]).dtype
-    coefs = np.zeros((len(ts), len(freqs), channels), dtype)
-    ts_list = distob.scatter([ts[:, i] for i in range(channels)])
-    coefs_list = distob.call_all(ts_list, 'cwt', freqs, wavelet, plot=False)
-    for i in range(channels):
-        coefs[:, :, i] = coefs_list[i] 
+        return cwt(ts, freqs, wavelet, plot)
+    import distob
+    vcwt = distob.vectorize(cwt)
+    coefs = vcwt(ts, freqs, wavelet, plot=False)
     if plot:
         _plot_cwt(ts, coefs, freqs)
     return coefs

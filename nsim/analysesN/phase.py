@@ -7,19 +7,14 @@
 
 """
 Various phase analyses that apply to an ensemble of many oscillators
-
-(This interface will be changed after the distributed array class
- is implemented)
 """
-
-# TODO refactor code so these apply to 'distributed timeseries' rather than Sims
-
+import distob
 from nsim import Timeseries
 import numpy as np
 from scipy import stats
 
 
-def periods(msim, phi=0.0):
+def periods_all(dts, phi=0.0):
     """For an ensemble of oscillators, return the set of periods lengths of 
     all successive oscillations of all oscillators.
 
@@ -29,34 +24,32 @@ def periods(msim, phi=0.0):
     If the timeseries of an oscillator phase begins (or ends) exactly at phi, 
     then the first (or last) oscillation will be included.
 
-    Arguments: 
-      sim MultipleSimulation 
-          with each simulation having single output variable representing phase
+    Arguments:
+      dts (DistTimeseries): where dts.shape[1] is 1 (single output variable
+        representing phase) and axis 2 ranges over multiple realizations of
+        the oscillator.
 
-      phi=0.0: float 
+      phi=0.0: float
           A single oscillation starts and ends at phase phi (by default zero).
     """
-    return np.hstack((sim.output.periods(phi) for sim in msim.sims))
-
-
-def snapshots(msim, start, interval):
-    snaps = [sim.output.t[start::interval] for sim in msim.sims]
-    ndim = snaps[0].ndim
-    if ndim <= 1:
-        array = np.dstack(tuple(ts[:,np.newaxis, np.newaxis] for ts in snaps))
+    periods = dts.periods(phi)
+    if hasattr(type(periods), '__array_interface__'):
+        return np.ravel(periods)
     else:
-        array = np.concatenate(tuple(ts[...,np.newaxis] for ts in snaps), 
-                               axis=ndim)
-    return Timeseries(array, snaps[0].tspan._ob)
+        return np.hstack([distob.gather(plist) for plist in dts.periods()])
 
 
-def phase_mean(msim):
-    snaps = msim.snapshots(0.0, msim.periods().mean()).mod2pi()
-    array = stats.circmean(snaps, high=np.pi, low=-np.pi, axis=2)
-    return Timeseries(array, snaps.tspan)
+def phase_mean(dts):
+    interval = dts.periods_all().mean()
+    snapshots = dts.t[0.0::interval]
+    snapshots = distob.gather(snapshots.mod2pi())
+    array = stats.circmean(snapshots, high=np.pi, low=-np.pi, axis=2)
+    return Timeseries(array, snapshots.tspan)
 
 
-def phase_std(msim):
-    snaps = msim.snapshots(0.0, msim.periods().mean()).mod2pi()
-    array = stats.circstd(snaps, high=np.pi, low=-np.pi, axis=2)
-    return Timeseries(array, snaps.tspan)
+def phase_std(dts):
+    interval = dts.periods_all().mean()
+    snapshots = dts.t[0.0::interval]
+    snapshots = distob.gather(snapshots.mod2pi())
+    array = stats.circstd(snapshots, high=np.pi, low=-np.pi, axis=2)
+    return Timeseries(array, snapshots.tspan)

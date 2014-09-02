@@ -6,64 +6,59 @@
 # (at your option) any later version. See <http://www.gnu.org/licenses/>.
 
 """
-Various plotting routines for a multiple simulation
-
-(This interface will be changed after the distributed array class 
- is implemented)
+Various plotting functions for a distributed timeseries
 """
-
+import distob
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import numbers
 
 
-def plot(multiple_sim, title=None):
-    """Plot results of a multiple simulation, such as RepeatedSim or NetworkSim
+def plot(dts, title=None, points=None, show=True):
+    """Plot a distributed timeseries
+    Args: 
+      dts (DistTimeseries)
+      title (str, optional)
+      points (int, optional): Limit the number of time points plotted. 
+        If specified, will downsample to use this total number of time points, 
+        and only fetch back the necessary points to the client for plotting.
+    Returns: 
+      fig
     """
-    ylabelprops = dict(rotation=0,
-                       horizontalalignment='right',
-                       verticalalignment='center',
-                       x=-0.01)
-    if title is None:
-        title=u'output at each node'
-    fig = plt.figure()
-    n = len(multiple_sim)
-    for i in range(n):
-        ax = fig.add_subplot(n, 1, i+1)
-        ts = multiple_sim[i].output
-        ax.plot(ts.tspan, ts)
-        ax.set_ylabel('node ' + str(i), **ylabelprops)
-        plt.setp(ax.get_xticklabels(), visible=False)
-    fig.axes[0].set_title(title)
-    plt.setp(fig.axes[n-1].get_xticklabels(), visible=True)
-    fig.axes[n-1].set_xlabel('time (s)')
-    fig.show()
-    return fig
+    if points is not None and len(dts.tspan) > points:
+        # then downsample  (TODO: use interpolation)
+        ix = np.linspace(0, len(dts.tspan) - 1, points, dtype=np.int64)
+        dts = dts[ix, ...]
+    ts = distob.gather(dts)
+    return ts.plot(title, show)
 
 
-def phase_histogram(msim, times, nbins=30, colormap=mpl.cm.Blues):
+def phase_histogram(dts, times, nbins=30, colormap=mpl.cm.Blues):
     """Plot a polar histogram of a phase variable's probability distribution
     Args:
-      msim: MultipleSimulation (assumes that msim.output is an angle variable)
+      dts: DistTimeseries with axis 2 ranging over separate instances of an
+        oscillator (time series values are assumed to represent an angle)
       times (float or sequence of floats): The target times at which 
         to plot the distribution
       nbins (int): number of histogram bins
       colormap
     """
-    snaps = msim.snapshots(0.0, msim.periods().mean()).mod2pi()
+    interval = dts.periods_all().mean()
+    snapshots = dts.t[0.0::interval].mod2pi()
+    snapshots = distob.gather(snapshots)
     if isinstance(times, numbers.Number):
         times = np.array([times], dtype=np.float64)
-    indices = snaps.tspan.searchsorted(times)
-    if indices[-1] == len(snaps.tspan):
+    indices = snapshots.tspan.searchsorted(times)
+    if indices[-1] == len(snapshots.tspan):
         indices[-1] -= 1
     nplots = len(indices)
     fig = plt.figure()
     n = np.zeros((nbins, nplots))
     for i in xrange(nplots):
         index = indices[i]
-        time = snaps.tspan[index]
-        phases = snaps[index, 0, :]
+        time = snapshots.tspan[index]
+        phases = snapshots[index, 0, :]
         ax = fig.add_subplot(1, nplots, i + 1, projection='polar')
         n[:,i], bins, patches = ax.hist(phases, nbins, (-np.pi, np.pi), 
                                         normed=True, histtype='bar')
