@@ -22,16 +22,18 @@ class Oscillator1D(nsim.SDEModel):
         return self.sigma
 
 
-sims = nsim.RepeatedSim(Oscillator1D, T=2400.0, repeat=1024)
+sims = nsim.RepeatedSim(Oscillator1D, T=2400.0, repeat=256)
 
-sims[0].output.mod2pi().t[0:50].plot() # show example 50 secs of oscillations
+first = sims[0].output # timeseries output of first realization: shape 480000x1
+first.t[100:150].mod2pi().plot(title='50 secs output of first realization')
 
-print('mean period is %g s' % sims.periods().mean())
+ts = sims.output  # timeseries output of all 256 realizations: 480000 x 1 x 256
+print('mean period is %g s' % ts.periods_all().mean())
 
-mean_series = sims.phase_mean()
+mean_series = ts.phase_mean()
 mean_series.plot(title='circular mean')
 
-diffusion_series = sims.phase_std()
+diffusion_series = ts.phase_std()
 diffusion_series.plot(title='circular std')
 
-sims.phase_histogram([20, 998, 1500, 2400], nbins=50)
+ts.phase_histogram([20, 998, 1500, 2400], nbins=30)
