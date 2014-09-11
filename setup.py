@@ -40,7 +40,7 @@ setup(
     license='GPLv3+',
     author='Matthew J. Aburn',
     install_requires=['IPython>=2.1',
-                      'distob>=0.1.3',
+                      'distob>=0.1.4',
                       'numpy>=1.6',
                       'scipy>=0.9',
                       'matplotlib>=1.1'],
