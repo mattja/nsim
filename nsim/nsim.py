@@ -129,12 +129,12 @@ class RemoteTimeseries(distob.RemoteArray, object):
                     # series to be joined do not agree on labels for this axis
                     axlabels = None
                 new_labels.append(axlabels)
-        if isinstance(new_array, RemoteArray):
+        if isinstance(new_array, distob.RemoteArray):
             # TODO: could have kept tspan and labels remote in this case
-            return __rts_from_ra(new_array, new_tspan, new_labels)
+            return _rts_from_ra(new_array, new_tspan, new_labels)
         else:
-            assert(isinstance(new_array, DistArray))
-            return __dts_from_da(new_array, new_tspan, new_labels)
+            assert(isinstance(new_array, distob.DistArray))
+            return _dts_from_da(new_array, new_tspan, new_labels)
 
 
 @distob.proxy_methods(_Timeslice, include_underscore=(
@@ -158,16 +158,15 @@ class DistTimeseries(distob.DistArray):
 
         Args:
           subts (list of RemoteTimeseries, or list of Ref to Timeseries): 
-            the sub-timeseries (possibly remote) which together will form the
-            DistTimeseries when joined. These must all have the same 
-            time points, shape and dtype.
+            the sub-timeseries (possibly remote) which form the whole
+            DistTimeseries when concatenated. These must all have the same 
+            time points, shape and dtype. Currently must have 
+            `ts.shape[axis] == 1` for each sub-timeseries `ts`.
 
-          axis (int, optional): Position of the distributed axis. Cannot be 0,
-            that is, we currently only allow a non-time axis to be distributed.
-            If n Timeseries are given, each of shape (i1, i2, ..., iK),
-            and `axis` is not given, the resulting DistTimeseries will have
-            shape (i1, i2, ..., iK, n). But if `axis` is given then the
-            sub-series will be concatenated along a new axis in position `axis`
+          axis (int, optional): Position of the distributed axis, which is the
+            axis along which the sub-timeseries will be concatenated. Default
+            is the last axis. Cannot be 0, that is, we currently only allow a
+            non-time axis to be distributed.
 
           axislabels (list of str, optional): names to label each position 
             along the new distributed axis. e.g. ['node1', ..., 'nodeN']
@@ -472,7 +471,9 @@ class DistTimeseries(distob.DistArray):
             sub-timeseries)
         """
         def vf(self, *args, **kwargs):
-            refs = [ra._ref for ra in self._subarrays]
+            remove_axis = ((slice(None),)*(self._distaxis) + (0,) + 
+                           (slice(None),)*(self.ndim - self._distaxis - 1))
+            refs = [ra[remove_axis]._ref for ra in self._subarrays]
             dv = distob.engine._client[:]
             def remote_f(object_id, *args, **kwargs):
                 result = f(distob.engine[object_id], *args, **kwargs)
@@ -496,25 +497,29 @@ class DistTimeseries(distob.DistArray):
             if (all(isinstance(r, distob.RemoteArray) for r in results) and
                     all(r.shape == results[0].shape for r in results)):
                 # Then we can join the results and return a DistArray.
-                # We will keep the same axis distributed as in the input,
-                # unless the results have more dimensions than the input.
-                res_subshape = results[0].shape
-                if len(res_subshape) > self.ndim - 1:
-                    res_distaxis = len(res_subshape)
-                else:
-                    res_distaxis = self._distaxis
-                newaxes = res_distaxis - len(res_subshape)
-                if newaxes >= 1:
-                    ix = ((slice(None),) * len(res_subshape) + 
-                          (np.newaxis,) * newaxes)
-                    results = [r[ix] for r in results]
+                # To position result distaxis, match input shape where possible
+                old_subshape = (self.shape[0:self._distaxis] +
+                                self.shape[(self._distaxis+1):])
+                res_subshape = list(results[0].shape)
+                pos = len(res_subshape)
+                for i in range(len(old_subshape)):
+                    n = old_subshape[i]
+                    if n not in res_subshape:
+                        continue
+                    pos = res_subshape.index(n)
+                    res_subshape[pos] = None
+                    if i >= self._distaxis:
+                        break
+                    pos += 1
+                new_distaxis = pos
+                results = [r.expand_dims(new_distaxis) for r in results]
                 if all(isinstance(r, RemoteTimeseries) for r in results):
                     axlabels = self.labels[self._distaxis]
                     try:
-                       return DistTimeseries(results, res_distaxis, axlabels)
+                       return DistTimeseries(results, new_distaxis, axlabels)
                     except SimValueError:
                         pass
-                return distob.DistArray(results, res_distaxis)
+                return distob.DistArray(results, new_distaxis)
             else:
                 return results
         if hasattr(f, '__name__'):
@@ -552,7 +557,7 @@ class DistTimeseries(distob.DistArray):
             return DistTimeseries(new_subts, new_distaxis, axislabels)
 
 
-def __rts_from_ra(ra, tspan, labels):
+def _rts_from_ra(ra, tspan, labels):
     """construct a RemoteTimeseries from a RemoteArray"""
     eng_id = ra._ref.engine_id
     dv = distob.engine._client[eng_id]
@@ -566,7 +571,7 @@ def __rts_from_ra(ra, tspan, labels):
     return RemoteTimeseries(ref)
 
 
-def __dts_from_da(da, tspan, labels):
+def _dts_from_da(da, tspan, labels):
     """construct a DistTimeseries from a DistArray whose subarrays are already
     RemoteTimeseries 
     """
@@ -768,6 +773,7 @@ class MultipleSim(object):
             subts = [distob.expand_dims(rts, 1) for rts in subts]
             sub_ndim += 1
         distaxis = sub_ndim
+        subts = [distob.expand_dims(rts, distaxis) for rts in subts]
         return DistTimeseries(subts, distaxis, self._node_labels())
 
     timeseries = property(fget=__get_timeseries, doc="Rank 3 array representing"
@@ -782,6 +788,7 @@ class MultipleSim(object):
             subts = [distob.expand_dims(rts, 1) for rts in subts]
             sub_ndim += 1
         distaxis = sub_ndim
+        subts = [distob.expand_dims(rts, distaxis) for rts in subts]
         return DistTimeseries(subts, distaxis, self._node_labels())
 
     output = property(fget=__get_output, doc="Rank 3 array representing"

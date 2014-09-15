@@ -295,9 +295,9 @@ def epochs_distributed(ts, variability=None, threshold=0.0, minlength=1.0,
     if ts.ndim is 1:
         ts = ts[:, np.newaxis]
     if variability is None:
-        ts = distob.scatter(ts, axis=1)
+        dts = distob.scatter(ts, axis=1)
         vepochs = distob.vectorize(epochs)
-        results = vepochs(ts, None, threshold, minlength, plot=False)
+        results = vepochs(dts, None, threshold, minlength, plot=False)
     else: 
         def f(pair):
             return epochs(pair[0], pair[1], threshold, minlength, plot=False)
