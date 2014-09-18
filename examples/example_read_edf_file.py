@@ -3,7 +3,7 @@ from an .mat file or .edf file and analyze it.
 """
 import nsim
 
-ts = nsim.timeseries_from_edf('data/31_before-1+.edf')
+ts = nsim.timeseries_from_file('data/31_before-1+.edf')
 
 ts_filtered = ts.bandpass(1.5, 70.0)
 ts_filtered.psd()
