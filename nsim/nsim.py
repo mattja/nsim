@@ -311,7 +311,9 @@ class DistTimeseries(distob.DistArray):
             raise IndexError('too many indices for array')
         if basic_slicing:
             new_tspan = self.tspan[index[0]]
-            if not isinstance(new_tspan, np.ndarray) or new_tspan.shape is ():
+            if (not isinstance(new_tspan, np.ndarray) or 
+                    new_tspan.shape is () or
+                    new_tspan.shape[0] is 0):
                 # axis 0 has been sliced away: result is no longer a Timeseries
                 return ar
             new_labels = [None]
@@ -351,7 +353,8 @@ class DistTimeseries(distob.DistArray):
             if contiguous and not is_fancy[0]:
                 new_tspan = self.tspan[index[0]]
                 if (not isinstance(new_tspan, np.ndarray) or
-                        new_tspan.shape is ()):
+                        new_tspan.shape is () or
+                        new_tspan.shape[0] is 0):
                     # axis 0 has been sliced away: no longer a Timeseries
                     return ar
             # compute labels for the nonfancy output axes
@@ -415,7 +418,8 @@ class DistTimeseries(distob.DistArray):
                         if label_source is 0:
                             new_tspan = self.tspan[index[0][iix]]
                             if (not isinstance(new_tspan, np.ndarray) or
-                                    new_tspan.shape is ()):
+                                    new_tspan.shape is () or
+                                    new_tspan.shape[0] is 0):
                                 # axis 0 has been sliced away: not a Timeseries
                                 return ar
                             if not np.all(np.diff(new_tspan) > 0):
