@@ -219,6 +219,30 @@ class DistTimeseries(distob.DistArray):
         self.labels.insert(self._distaxis, axislabels)
         self.t = _Timeslice(self)
 
+    def _fetch(self):
+        """update local cached copy of the real object"""
+        if not self._obcache_current:
+            from distob import engine
+            ax = self._distaxis
+            self._obcache = distob.concatenate(
+                    [ra._ob for ra in self._subarrays], ax)
+            self._obcache.labels[ax] = self.labels[ax]
+            # let subarray obcaches and main obcache be views on same memory:
+            for i in range(self._n):
+                ix = [slice(None)] * self.ndim
+                ix[ax] = slice(i, i+1)
+                self._subarrays[i]._obcache = self._obcache[tuple(ix)]
+            self._obcache_current = True
+            # now prefer local processing:
+            self.__engine_affinity__ = (engine.id, self.__engine_affinity__[1])
+
+    def __ob(self):
+        """return a copy of the real object"""
+        self._fetch()
+        return self._obcache
+
+    _ob = property(fget=__ob)
+
     @classmethod
     def add_analyses(cls, source, vectorize=False):
         """Dynamically add new analysis methods to the DistTimeseries class.
