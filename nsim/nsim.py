@@ -245,8 +245,7 @@ class DistTimeseries(distob.DistArray):
     def __getitem__(self, index):
         """Slice the distributed timeseries"""
         ar = super(DistTimeseries, self).__getitem__(index)
-        if (isinstance(ar, RemoteTimeseries) or 
-                isinstance(ar, distob.RemoteArray)):
+        if isinstance(ar, distob.RemoteArray) or isinstance(ar, np.ndarray):
             # slicing result is no longer distributed
             return ar
         # otherwise `ar` is a DistArray
