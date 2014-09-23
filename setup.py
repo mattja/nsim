@@ -40,7 +40,7 @@ setup(
     license='GPLv3+',
     author='Matthew J. Aburn',
     install_requires=['IPython>=2.1',
-                      'distob>=0.1.5',
+                      'distob>=0.1.6',
                       'numpy>=1.6',
                       'scipy>=0.9',
                       'matplotlib>=1.1'],
@@ -62,5 +62,6 @@ setup(
         'Topic :: System :: Distributed Computing',
         ],
     extras_require={'read_EDF_BDF_files': ['python-edf>=0.4'],
-                    'read_all_files': ['python-biosig>=1.3']}
+                    'read_all_files': ['python-biosig>=1.3'],
+                    'distributed_ufunc': ['numpy>=1.10']}
 )
