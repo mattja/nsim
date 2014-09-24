@@ -10,11 +10,12 @@ Various phase analyses that apply to an ensemble of many oscillators
 """
 import distob
 from nsim import Timeseries
+from nsim import analyses1
 import numpy as np
 from scipy import stats
 
 
-def periods_all(dts, phi=0.0):
+def periods(dts, phi=0.0):
     """For an ensemble of oscillators, return the set of periods lengths of 
     all successive oscillations of all oscillators.
 
@@ -32,11 +33,12 @@ def periods_all(dts, phi=0.0):
       phi=0.0: float
           A single oscillation starts and ends at phase phi (by default zero).
     """
-    periods = dts.periods(phi)
-    if hasattr(type(periods), '__array_interface__'):
-        return np.ravel(periods)
+    vperiods = distob.vectorize(analyses1.periods)
+    all_periods = vperiods(dts, phi)
+    if hasattr(type(all_periods), '__array_interface__'):
+        return np.ravel(all_periods)
     else:
-        return np.hstack([distob.gather(plist) for plist in dts.periods()])
+        return np.hstack([distob.gather(plist) for plist in all_periods])
 
 
 def phase_mean(dts):

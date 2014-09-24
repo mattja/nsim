@@ -90,4 +90,8 @@ def periods(ts, phi=0.0):
       phi (float): A single oscillation starts and ends at phase phi (by 
         default zero).
     """
-    return np.diff(ts.tspan[crossing_indices(ts, phi)])
+    ts = np.squeeze(ts)
+    if ts.ndim <= 1:
+        return np.diff(ts.tspan[crossing_indices(ts, phi)])
+    else:
+        return np.hstack(ts[..., i].periods(phi) for i in range(ts.shape[-1]))
