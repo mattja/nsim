@@ -209,14 +209,17 @@ class DistTimeseries(distob.DistArray):
                 not all(t == self.tspan[-1] for t in ends)):
             raise SimValueError(u'timeseries must use the same time points')
         nlabels = [rts.labels for rts in self._subarrays]
-        self.labels = [None]
+        self.labels = [None] * self.ndim
         # only give labels to an axis if all sub-timeseries agree
-        for i in range(1, self.ndim - 1):
-            if len(set(labels[i] for labels in nlabels)) is 1:
-                self.labels.append(nlabels[0][i])
+        for i in range(1, self.ndim):
+            if i is self._distaxis:
+                self.labels[i] = axislabels
             else:
-                self.labels.append(None)
-        self.labels.insert(self._distaxis, axislabels)
+                candidate = nlabels[0][i]
+                if all(labels[i] == candidate for labels in nlabels[1:]):
+                    self.labels[i] = candidate
+        if self._obcache_current:
+            self._obcache.labels[self._distaxis] = axislabels
         self.t = _Timeslice(self)
 
     def _fetch(self):
@@ -226,7 +229,8 @@ class DistTimeseries(distob.DistArray):
             ax = self._distaxis
             self._obcache = distob.concatenate(
                     [ra._ob for ra in self._subarrays], ax)
-            self._obcache.labels[ax] = self.labels[ax]
+            if hasattr(self, 'labels'):
+                self._obcache.labels[ax] = self.labels[ax]
             # let subarray obcaches and main obcache be views on same memory:
             for i in range(self._n):
                 ix = [slice(None)] * self.ndim
@@ -294,7 +298,8 @@ class DistTimeseries(distob.DistArray):
             # slicing result is no longer distributed
             return ar
         # otherwise `ar` is a DistArray
-        if not isinstance(ar._subarrays[0], RemoteTimeseries):
+        if (not isinstance(ar._subarrays[0], RemoteTimeseries) and
+                not isinstance(ar._subarrays[0], Timeseries)):
             return ar
         cur_labels = self.labels
         cur_shape = self.shape # current values, may be updated by np.newaxis
