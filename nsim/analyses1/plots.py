@@ -36,7 +36,10 @@ def plot(ts, title=None, show=True):
         for i in range(num_subplots):
             ax = fig.add_subplot(num_subplots, 1, i+1)
             ax.plot(ts.tspan, ts[...,i])
-            ax.set_ylabel('node ' + str(i), **ylabelprops)
+            if ts.labels[-1] is not None:
+                ax.set_ylabel(ts.labels[-1][i], **ylabelprops)
+            else:
+                ax.set_ylabel('node ' + str(i), **ylabelprops)
             plt.setp(ax.get_xticklabels(), visible=False)
         fig.axes[0].set_title(title)
         plt.setp(fig.axes[num_subplots-1].get_xticklabels(), visible=True)
