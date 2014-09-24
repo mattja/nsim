@@ -223,7 +223,8 @@ class DistTimeseries(distob.DistArray):
         self.t = _Timeslice(self)
 
     def _fetch(self):
-        """update local cached copy of the real object"""
+        """forces update of a local cached copy of the real object
+        (regardless of the preference setting self.cache)"""
         if not self._obcache_current:
             from distob import engine
             ax = self._distaxis
@@ -245,7 +246,7 @@ class DistTimeseries(distob.DistArray):
         self._fetch()
         return self._obcache
 
-    _ob = property(fget=__ob)
+    _ob = property(fget=__ob, doc='return a local copy of the object')
 
     @classmethod
     def add_analyses(cls, source, vectorize=False):
@@ -544,10 +545,14 @@ class DistTimeseries(distob.DistArray):
             not arrays, will return a list with the result for each
             sub-timeseries)
         """
+        # TODO: shares much code with the superclass method. refactor.
         def vf(self, *args, **kwargs):
             remove_axis = ((slice(None),)*(self._distaxis) + (0,) + 
                            (slice(None),)*(self.ndim - self._distaxis - 1))
+            old_cache_pref = self.cache
+            self.cache = False
             refs = [ra[remove_axis]._ref for ra in self._subarrays]
+            self.cache = old_cache_pref
             dv = distob.engine._client[:]
             def remote_f(object_id, *args, **kwargs):
                 result = f(distob.engine[object_id], *args, **kwargs)
@@ -557,6 +562,7 @@ class DistTimeseries(distob.DistArray):
                     return result
             results = []
             for ref in refs:
+                # TODO: currently does not allow subarrays to be on the client
                 dv.targets = ref.engine_id
                 ar = dv.apply_async(remote_f, ref.object_id, *args, **kwargs)
                 results.append(ar)
