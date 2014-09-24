@@ -432,16 +432,18 @@ class Timeseries(np.ndarray):
         super(Timeseries, self).__setstate__(tsstate[0])
         self.__dict__.update(tsstate[1])
 
-    def __distob_scatter__(self, axis=None):
+    def __distob_scatter__(self, axis=-1, destination=None):
         """Turn a Timeseries into a distributed timeseries"""
-        if axis is None:
-            axis = self.ndim - 1
-        if axis == 0:
-            raise ValueError(u'Currently cannot distribute the time axis')
         import distob
         from nsim import DistTimeseries
+        if axis is None:
+            return distob.distob._scatter_ndarray(self, None, destination)
+        if axis == 0:
+            raise ValueError(u'Currently cannot distribute the time axis')
+        if axis < 0:
+            axis = self.ndim + axis
+        dar = distob.distob._scatter_ndarray(self, axis, destination)
         axlabels = self.labels[axis]
-        dar = distob.distob._scatter_ndarray(self, axis)
         return DistTimeseries([rts for rts in dar._subarrays], axis, axlabels)
 
     def angle(self, deg=0):
