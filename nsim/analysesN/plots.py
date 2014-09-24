@@ -28,7 +28,7 @@ def plot(dts, title=None, points=None, show=True):
     """
     if points is not None and len(dts.tspan) > points:
         # then downsample  (TODO: use interpolation)
-        ix = np.linspace(0, len(dts.tspan) - 1, points, dtype=np.int64)
+        ix = np.linspace(0, len(dts.tspan) - 1, points).astype(np.int64)
         dts = dts[ix, ...]
     ts = distob.gather(dts)
     return ts.plot(title, show)
