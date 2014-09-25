@@ -726,10 +726,12 @@ def _rts_from_ra(ra, tspan, labels):
 
 
 def _dts_from_da(da, tspan, labels):
-    """construct a DistTimeseries from a DistArray whose subarrays are already
-    RemoteTimeseries 
-    """
-    assert(all(isinstance(ra, RemoteTimeseries) for ra in da._subarrays))
+    """construct a DistTimeseries from a DistArray"""
+    sublabels = labels[:]
+    for i, ra in enumerate(da._subarrays):
+        if not isinstance(ra, RemoteTimeseries):
+            sublabels[da._distaxis] = [labels[da._distaxis][i]]
+            da._subarrays[i] = _rts_from_ra(ra, tspan, sublabels)
     da.__class__ = DistTimeseries
     da.tspan = tspan
     da.labels = labels
