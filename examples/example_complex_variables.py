@@ -34,13 +34,9 @@ sims = nsim.RepeatedSim(Osc, T=1440.0, repeat=10)
 ts = sims.timeseries
 means = ts.mean(axis=0)
 
-# ufunc support (including array subtraction) for distributed arrays is not yet
-# implemented. Temporary workaround: gather timeseries to make them local first
-ts = gather(ts)
-means = gather(means)
-
 phases = (ts - means).angle()
+
 phases.plot(title='phase at each node')
 phases[:,:,3].t[100:160].plot(title='phase') # show 60 seconds of node 3
 
-print('mean period is %g seconds' % phases[:,:,1].periods().mean())
+print('mean period is %g seconds' % phases.periods().mean())
