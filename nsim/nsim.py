@@ -42,6 +42,7 @@ import numpy as np
 from collections import Sequence
 import copy
 import types
+import warnings
 import numbers
 import random
 #from memory_profiler import profile
@@ -635,6 +636,24 @@ class DistTimeseries(distob.DistArray):
         else:
             axislabels = self.labels[self._distaxis]
             return DistTimeseries(new_subts, new_distaxis, axislabels)
+
+    def angle(self, deg=False):
+        """Return the angle of a complex Timeseries
+
+        Args:
+          deg (bool, optional):
+            Return angle in degrees if True, radians if False (default).
+
+        Returns:
+          angle (Timeseries):
+            The counterclockwise angle from the positive real axis on
+            the complex plane, with dtype as numpy.float64.
+        """
+        if self.dtype.str[1] != 'c':
+            warnings.warn('angle() is intended for complex-valued timeseries',
+                          RuntimeWarning, 1)
+        da = distob.vectorize(np.angle)(self, deg)
+        return _dts_from_da(da, self.tspan, self.labels)
 
 
 def _ufunc_wrap(out_arr, ufunc, method, i, inputs, **kwargs):
