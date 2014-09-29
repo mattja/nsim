@@ -57,7 +57,7 @@ def plot(ts, title=None, show=True):
             rect = 0.1, 0.85*(num_ax - i - 1)/num_ax + 0.1, 0.8, 0.85/num_ax
             ax = fig.add_axes(rect, **axprops)
             # use i'th color in cycle
-            _ = [ax._get_lines.color_cycle.next() for j in range(i)]
+            _ = [next(ax._get_lines.color_cycle) for j in range(i)]
             ax.plot(ts.tspan, ts[...,i])
             plt.setp(ax.get_xticklabels(), visible=False)
             if ts.labels[1] is not None:

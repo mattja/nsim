@@ -72,7 +72,7 @@ class RemoteTimeseries(distob.RemoteArray, object):
     """Local object representing a Timeseries that may be local or remote"""
 
     def __repr__(self):
-        return self._cached_apply('__repr__').replace(
+        return distob.methodcall(self, '__repr__').replace(
             self._ref.type.__name__, self.__class__.__name__, 1)
 
     def __numpy_ufunc__(self, ufunc, method, i, inputs, **kwargs):
@@ -106,7 +106,7 @@ class RemoteTimeseries(distob.RemoteArray, object):
           plot (bool)
         """
         if not plot:
-            return self._cached_apply('psd', plot=False)
+            return distob.methodcall(self, 'psd', plot=False)
         else:
             self._fetch()
             return self._obcache.psd(plot=True)
@@ -240,7 +240,8 @@ class DistTimeseries(distob.DistArray):
                 self._subarrays[i]._obcache = self._obcache[tuple(ix)]
             self._obcache_current = True
             # now prefer local processing:
-            self.__engine_affinity__ = (engine.id, self.__engine_affinity__[1])
+            self.__engine_affinity__ = (
+                    engine.eid, self.__engine_affinity__[1])
 
     def __ob(self):
         """return a copy of the real object"""
@@ -547,34 +548,19 @@ class DistTimeseries(distob.DistArray):
             sub-timeseries)
         """
         # TODO: shares much code with the superclass method. refactor.
+        def _reduced_f(a, distaxis, *args, **kwargs):
+            """(Executed on a remote or local engine) Remove specified axis
+            from array `a` and then apply f to it"""
+            remove_axis = ((slice(None),)*(distaxis) + (0,) +
+                           (slice(None),)*(a.ndim - distaxis - 1))
+            return f(a[remove_axis], *args, **kwargs)
         def vf(self, *args, **kwargs):
-            remove_axis = ((slice(None),)*(self._distaxis) + (0,) + 
-                           (slice(None),)*(self.ndim - self._distaxis - 1))
-            old_cache_pref = self.cache
-            self.cache = False
-            refs = [ra[remove_axis]._ref for ra in self._subarrays]
-            self.cache = old_cache_pref
-            dv = distob.engine._client[:]
-            def remote_f(object_id, *args, **kwargs):
-                result = f(distob.engine[object_id], *args, **kwargs)
-                if type(result) in distob.engine.proxy_types:
-                    return distob.Ref(result)
-                else:
-                    return result
-            results = []
-            for ref in refs:
-                # TODO: currently does not allow subarrays to be on the client
-                dv.targets = ref.engine_id
-                ar = dv.apply_async(remote_f, ref.object_id, *args, **kwargs)
-                results.append(ar)
-            for i in range(len(results)):
-                ar = results[i]
-                ar.wait()
-                results[i] = ar.r
-                if isinstance(results[i], distob.Ref):
-                    ref = results[i]
-                    RemoteClass = distob.engine.proxy_types[ref.type]
-                    results[i] = RemoteClass(ref)
+            kwargs = kwargs.copy()
+            kwargs['block'] = False
+            kwargs['prefer_local'] = False
+            ars = [distob.call(_reduced_f, ra, self._distaxis, 
+                               *args, **kwargs) for ra in self._subarrays]
+            results = [distob.convert_result(ar) for ar in ars]
             if (all(isinstance(r, distob.RemoteArray) for r in results) and
                     all(r.shape == results[0].shape for r in results)):
                 # Then we can join the results and return a DistArray.
@@ -602,7 +588,7 @@ class DistTimeseries(distob.DistArray):
                         pass
                 return distob.DistArray(results, new_distaxis)
             else:
-                return results
+                return results  # list
         if hasattr(f, '__name__'):
             vf.__name__ = 'v' + f.__name__
             f_str = f.__name__ + '()'
@@ -699,39 +685,26 @@ def _ufunc_wrap(out_arr, ufunc, method, i, inputs, **kwargs):
         return out_arr
 
 
-def _rts_from_ra(ra, tspan, labels):
+def _rts_from_ra(ra, tspan, labels, block=True):
     """construct a RemoteTimeseries from a RemoteArray"""
-    eng_id = ra._ref.engine_id
-    if isinstance(tspan, distob.RemoteArray):
-        # avoid moving tspan if it is already on the same engine as ra
-        if tspan._ref.engine_id == eng_id:
-            tspan_or_id = tspan._ref.object_id
-        else:
-            tspan_or_id = distob.gather(tspan)
-    else:
-        tspan_or_id = tspan
-    dv = distob.engine._client[eng_id]
-    def remote_convert(ra_id, tspan_or_id, labels):
-        from distob import engine, Ref
+    def _convert(a, tspan, labels):
         from nsim import Timeseries
-        array = engine[ra_id]
-        if type(tspan_or_id) is type(ra_id):
-            tspan = engine[tspan_or_id]
-        else:
-            tspan = tspan_or_id
-        ts = Timeseries(array, tspan, labels)
-        return Ref(ts)
-    ref = dv.apply_sync(remote_convert, ra._ref.object_id, tspan_or_id, labels)
-    return RemoteTimeseries(ref)
-
+        return Timeseries(a, tspan, labels)
+    return distob.call(
+            _convert, ra, tspan, labels, prefer_local=False, block=block)
 
 def _dts_from_da(da, tspan, labels):
     """construct a DistTimeseries from a DistArray"""
     sublabels = labels[:]
+    new_subarrays = []
     for i, ra in enumerate(da._subarrays):
-        if not isinstance(ra, RemoteTimeseries):
+        if isinstance(ra, RemoteTimeseries):
+            new_subarrays.append(ra)
+        else:
             sublabels[da._distaxis] = [labels[da._distaxis][i]]
-            da._subarrays[i] = _rts_from_ra(ra, tspan, sublabels)
+            new_subarrays.append(_rts_from_ra(ra, tspan, sublabels, False))
+    new_subarrays = [distob.convert_result(ar) for ar in new_subarrays]
+    da._subarrays = new_subarrays
     da.__class__ = DistTimeseries
     da.tspan = tspan
     da.labels = labels
@@ -883,9 +856,11 @@ class RemoteSimulation(distob.Remote, Simulation):
 
     def compute(self):
         """Start the computation process asynchronously"""
-        def remote_compute(sim_id):
-            distob.engine[sim_id].compute()
-        self._dv.apply_async(remote_compute, self._id)
+        from distob import methodcall
+        methodcall(self, 'compute', prefer_local=False, block=False)
+        #def remote_compute(sim_id):
+        #    distob.engine[sim_id].compute()
+        #self._dv.apply_async(remote_compute, self._id)
 
 
 class MultipleSim(object):

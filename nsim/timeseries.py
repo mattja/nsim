@@ -163,28 +163,18 @@ class Timeseries(np.ndarray):
             import distob
             if distob.engine is not None and cls in distob.engine.proxy_types:
                 RemoteClass = distob.engine.proxy_types[cls]
-                def mk_proxy_method(method_name, doc):
-                    def method(self, *args, **kwargs):
-                        if self._obcache_current:
-                            return getattr(self._obcache, method_name)(
-                                    *args, **kwargs)
-                        else:
-                            return self._try_cached_apply(
-                                    method_name, *args, **kwargs)
-                    method.__doc__ = doc
-                    method.__name__ = method_name
-                    return method
-                remotemethod = mk_proxy_method(name, f.__doc__)
+                remotemethod = distob._make_proxy_method(name, f.__doc__)
                 setattr(RemoteClass, name, remotemethod)
                 # also update class definitions on remote engines
                 if isinstance(distob.engine, distob.ObjectHub):
                     dv = distob.engine._dv
+                    dv.targets = 'all'
                     def remote_update(name, Class, f, remotemethod):
                         setattr(Class, name, f)
                         RemoteClass = distob.engine.proxy_types[Class]
                         setattr(RemoteClass, name, remotemethod)
-                    ars = self._dv.apply(remote_uptdae, real_type, proxy_type)
-                    self._dv.wait(ars)
+                    ars = dv.apply(remote_update, real_type, proxy_type)
+                    dv.wait(ars)
                     for ar in ars:
                         if not ar.successful():
                             raise ar.r

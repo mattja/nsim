@@ -28,6 +28,8 @@ and to analyze the properties of the resulting timeseries.
 -  Besides simulations, arrays of time series data can be loaded from
    MATLAB .mat files or .EDF files for distributed analysis.
 
+-  For best results use numpy 1.10.0 or later (not yet released!) this enables us to support distributed computation when analysing the resulting time series. You can get a development snapshot of numpy here: https://github.com/numpy/numpy/archive/master.zip
+
 TODO
 ----
 
