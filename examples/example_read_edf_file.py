@@ -12,4 +12,4 @@ ts2 = ts_filtered.t[800:840, 3] # just channel 3, time from 800 to 840 seconds
 ts2.plot()
 mobility, complexity = ts2.hjorth()
 
-ts_filtered[:, 0:19].epochs_distributed() # find intervals of low variability
+ts_filtered.t[800:, 0:8].epochs_distributed() # intervals of low variability
