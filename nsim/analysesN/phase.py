@@ -42,7 +42,7 @@ def periods(dts, phi=0.0):
 
 
 def phase_mean(dts):
-    interval = dts.periods_all().mean()
+    interval = dts.periods().mean()
     snapshots = dts.t[0.0::interval]
     snapshots = distob.gather(snapshots.mod2pi())
     array = stats.circmean(snapshots, high=np.pi, low=-np.pi, axis=2)
@@ -50,7 +50,7 @@ def phase_mean(dts):
 
 
 def phase_std(dts):
-    interval = dts.periods_all().mean()
+    interval = dts.periods().mean()
     snapshots = dts.t[0.0::interval]
     snapshots = distob.gather(snapshots.mod2pi())
     array = stats.circstd(snapshots, high=np.pi, low=-np.pi, axis=2)

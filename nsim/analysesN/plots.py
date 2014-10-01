@@ -44,7 +44,7 @@ def phase_histogram(dts, times, nbins=30, colormap=mpl.cm.Blues):
       nbins (int): number of histogram bins
       colormap
     """
-    interval = dts.periods_all().mean()
+    interval = dts.periods().mean()
     snapshots = dts.t[0.0::interval].mod2pi()
     snapshots = distob.gather(snapshots)
     if isinstance(times, numbers.Number):
