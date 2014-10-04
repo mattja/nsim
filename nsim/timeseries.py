@@ -700,7 +700,7 @@ class _Timeslice(object):
             if ts1.ndim < ts.ndim:
                 return ts1[otherix]
             else:
-                return ts1[:, otherix]
+                return ts1[(slice(None,),) + otherix]
         else:
             raise TypeError("Time slicing can't handle that type of index yet")
 
