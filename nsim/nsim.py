@@ -507,7 +507,13 @@ class DistTimeseries(distob.DistArray):
         if all(l is None for l in self.labels):
             labelsrep = ''
         else:
-            labelsrep = ', \nlabels=' + repr(self.labels)
+            labelsrep = ', \nlabels=['
+            for lab in self.labels:
+                if len(repr(lab)) > 160:
+                    labelsrep += '[%s, ..., %s], ' % (lab[0], lab[-1])
+                else:
+                    labelsrep += repr(lab) + ', '
+            labelsrep = labelsrep[:-2] + ']'
         return head + content + labelsrep + ')'
 
     def __numpy_ufunc__(self, ufunc, method, i, inputs, **kwargs):
