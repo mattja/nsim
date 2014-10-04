@@ -9,10 +9,8 @@
 Various phase analyses that apply to an ensemble of many oscillators
 """
 import distob
-from nsim import Timeseries
 from nsim import analyses1
 import numpy as np
-from scipy import stats
 
 
 def periods(dts, phi=0.0):
@@ -41,17 +39,13 @@ def periods(dts, phi=0.0):
         return np.hstack([distob.gather(plist) for plist in all_periods])
 
 
-def phase_mean(dts):
-    interval = dts.periods().mean()
-    snapshots = dts.t[0.0::interval]
-    snapshots = distob.gather(snapshots.mod2pi())
-    array = stats.circmean(snapshots, high=np.pi, low=-np.pi, axis=2)
-    return Timeseries(array, snapshots.tspan)
+def circmean(dts, axis=2):
+    """Circular mean phase"""
+    return np.exp(1.0j * dts).mean(axis=axis).angle()
 
 
-def phase_std(dts):
-    interval = dts.periods().mean()
-    snapshots = dts.t[0.0::interval]
-    snapshots = distob.gather(snapshots.mod2pi())
-    array = stats.circstd(snapshots, high=np.pi, low=-np.pi, axis=2)
-    return Timeseries(array, snapshots.tspan)
+def circstd(dts, axis=2):
+    """Circular standard deviation"""
+    res = np.exp(1.0j * dts).mean(axis=axis)
+    R = np.abs(res)
+    return np.sqrt(-2.0 * np.log(R))

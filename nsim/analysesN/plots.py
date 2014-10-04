@@ -44,21 +44,18 @@ def phase_histogram(dts, times, nbins=30, colormap=mpl.cm.Blues):
       nbins (int): number of histogram bins
       colormap
     """
-    interval = dts.periods().mean()
-    snapshots = dts.t[0.0::interval].mod2pi()
-    snapshots = distob.gather(snapshots)
     if isinstance(times, numbers.Number):
         times = np.array([times], dtype=np.float64)
-    indices = snapshots.tspan.searchsorted(times)
-    if indices[-1] == len(snapshots.tspan):
+    indices = distob.gather(dts.tspan.searchsorted(times))
+    if indices[-1] == len(dts.tspan):
         indices[-1] -= 1
     nplots = len(indices)
     fig = plt.figure()
     n = np.zeros((nbins, nplots))
     for i in xrange(nplots):
         index = indices[i]
-        time = snapshots.tspan[index]
-        phases = snapshots[index, 0, :]
+        time = dts.tspan[index]
+        phases = distob.gather(dts[index, 0, :])
         ax = fig.add_subplot(1, nplots, i + 1, projection='polar')
         n[:,i], bins, patches = ax.hist(phases, nbins, (-np.pi, np.pi), 
                                         normed=True, histtype='bar')
