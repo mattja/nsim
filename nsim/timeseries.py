@@ -511,7 +511,14 @@ class Timeseries(np.ndarray):
                 isinstance(axis, _TupleType) and 0 in axis):
             return np.asarray(self).min(axis, out)
         else:
-            return super(Timeseries, self).min(axis, out)
+            ar = super(Timeseries, self).min(axis, dtype, out)
+            if isinstance(axis, numbers.Number):
+                axis = (axis,)
+            new_labels = []
+            for i in range(self.ndim):
+                if i not in axis:
+                    new_labels.append(self.labels[i])
+            return Timeseries(ar, self.tspan, new_labels)
 
     def max(self, axis=None, out=None):
         if (axis is 0 or 
@@ -519,7 +526,14 @@ class Timeseries(np.ndarray):
                 isinstance(axis, _TupleType) and 0 in axis):
             return np.asarray(self).max(axis, out)
         else:
-            return super(Timeseries, self).max(axis, out)
+            ar = super(Timeseries, self).max(axis, dtype, out)
+            if isinstance(axis, numbers.Number):
+                axis = (axis,)
+            new_labels = []
+            for i in range(self.ndim):
+                if i not in axis:
+                    new_labels.append(self.labels[i])
+            return Timeseries(ar, self.tspan, new_labels)
 
     def ptp(self, axis=None, out=None):
         if (axis is 0 or 
@@ -527,7 +541,14 @@ class Timeseries(np.ndarray):
                 isinstance(axis, _TupleType) and 0 in axis):
             return np.asarray(self).ptp(axis, out)
         else:
-            return super(Timeseries, self).ptp(axis, out)
+            ar = super(Timeseries, self).ptp(axis, dtype, out)
+            if isinstance(axis, numbers.Number):
+                axis = (axis,)
+            new_labels = []
+            for i in range(self.ndim):
+                if i not in axis:
+                    new_labels.append(self.labels[i])
+            return Timeseries(ar, self.tspan, new_labels)
 
     def mean(self, axis=None, dtype=None, out=None):
         if (axis is 0 or 
@@ -535,7 +556,14 @@ class Timeseries(np.ndarray):
                 isinstance(axis, _TupleType) and 0 in axis):
             return np.asarray(self).mean(axis, dtype, out)
         else:
-            return super(Timeseries, self).mean(axis, dtype, out)
+            ar = super(Timeseries, self).mean(axis, dtype, out)
+            if isinstance(axis, numbers.Number):
+                axis = (axis,)
+            new_labels = []
+            for i in range(self.ndim):
+                if i not in axis:
+                    new_labels.append(self.labels[i])
+            return Timeseries(ar, self.tspan, new_labels)
 
     def std(self, axis=None, dtype=None, out=None, ddof=0):
         if (axis is 0 or 
@@ -543,7 +571,14 @@ class Timeseries(np.ndarray):
                 isinstance(axis, _TupleType) and 0 in axis):
             return np.asarray(self).std(axis, dtype, out, ddof)
         else:
-            return super(Timeseries, self).std(axis, dtype, out, ddof)
+            ar = super(Timeseries, self).std(axis, dtype, out)
+            if isinstance(axis, numbers.Number):
+                axis = (axis,)
+            new_labels = []
+            for i in range(self.ndim):
+                if i not in axis:
+                    new_labels.append(self.labels[i])
+            return Timeseries(ar, self.tspan, new_labels)
 
     def var(self, axis=None, dtype=None, out=None, ddof=0):
         if (axis is 0 or 
@@ -551,7 +586,14 @@ class Timeseries(np.ndarray):
                 isinstance(axis, _TupleType) and 0 in axis):
             return np.asarray(self).var(axis, dtype, out, ddof)
         else:
-            return super(Timeseries, self).var(axis, dtype, out, ddof)
+            ar = super(Timeseries, self).var(axis, dtype, out)
+            if isinstance(axis, numbers.Number):
+                axis = (axis,)
+            new_labels = []
+            for i in range(self.ndim):
+                if i not in axis:
+                    new_labels.append(self.labels[i])
+            return Timeseries(ar, self.tspan, new_labels)
 
     def merge(self, ts):
         """Merge another timeseries with this one
