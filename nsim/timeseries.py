@@ -742,13 +742,13 @@ class _Timeslice(object):
         elif isinstance(index, _TupleType):
             timeix = index[0]
             otherix = index[1:]
-            if len(otherix) is 1:
-                otherix = otherix[0]
             ts1 = ts.t[timeix]
             if ts1.ndim < ts.ndim:
+                if len(otherix) is 1:
+                    otherix = otherix[0]
                 return ts1[otherix]
             else:
-                return ts1[(slice(None,),) + otherix]
+                return ts1[(slice(None),) + otherix]
         else:
             raise TypeError("Time slicing can't handle that type of index yet")
 
