@@ -95,3 +95,15 @@ def periods(ts, phi=0.0):
         return np.diff(ts.tspan[crossing_indices(ts, phi)])
     else:
         return np.hstack(ts[..., i].periods(phi) for i in range(ts.shape[-1]))
+
+
+def circmean(ts, axis=2):
+    """Circular mean phase"""
+    return np.exp(1.0j * ts).mean(axis=axis).angle()
+
+
+def circstd(ts, axis=2):
+    """Circular standard deviation"""
+    res = np.exp(1.0j * ts).mean(axis=axis)
+    R = np.abs(res)
+    return np.sqrt(-2.0 * np.log(R))
