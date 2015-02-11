@@ -552,6 +552,7 @@ class Timeseries(np.ndarray):
 
     def mean(self, axis=None, dtype=None, out=None):
         if (axis is 0 or 
+                axis is None or
                 self.ndim is 1 or 
                 isinstance(axis, _TupleType) and 0 in axis):
             return np.asarray(self).mean(axis, dtype, out)
