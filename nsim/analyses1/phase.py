@@ -21,7 +21,7 @@ def mod2pi(ts):
     return np.pi - np.mod(np.pi - ts, 2*np.pi)
 
 
-def crossing_indices(ts, phi=0.0):
+def phase_crossings(ts, phi=0.0):
     """For a single variable timeseries representing the phase of an oscillator,
     find the time indices each time the phase crosses angle phi,
     with the condition that the phase must visit phi+pi between crossings.
@@ -92,7 +92,7 @@ def periods(ts, phi=0.0):
     """
     ts = np.squeeze(ts)
     if ts.ndim <= 1:
-        return np.diff(ts.tspan[crossing_indices(ts, phi)])
+        return np.diff(ts.tspan[phase_crossings(ts, phi)])
     else:
         return np.hstack(ts[..., i].periods(phi) for i in range(ts.shape[-1]))
 

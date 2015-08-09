@@ -40,3 +40,8 @@ phases.plot(title='phase at each node')
 phases[:,:,3].t[100:160].plot(title='phase') # show 60 seconds of node 3
 
 print('mean period is %g seconds' % phases.periods().mean())
+
+r = (ts - means).abs()
+r.plot(title='amplitude at each node')
+print('\namplitude mean reversion time is %g seconds' % 
+      r.mean_reversion_times().mean())
