@@ -442,6 +442,19 @@ class Timeseries(np.ndarray):
         axlabels = self.labels[axis]
         return DistTimeseries([rts for rts in dar._subarrays], axis, axlabels)
 
+    def absolute(self):
+        """Calculate the absolute value element-wise.
+
+        Returns:
+          absolute (Timeseries):
+            Absolute value. For complex input (a + b*j) gives sqrt(a**a + b**2)
+        """
+        return Timeseries(np.absolute(self), self.tspan, self.labels)
+
+    def abs(self):
+        """Calculate the absolute value element-wise."""
+        return self.absolute()
+
     def angle(self, deg=False):
         """Return the angle of the complex argument.
 
