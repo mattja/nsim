@@ -593,6 +593,8 @@ class DistTimeseries(distob.DistArray):
                     except SimValueError:
                         pass
                 return distob.DistArray(results, new_distaxis)
+            elif all(isinstance(r, numbers.Number) for r in results):
+                return np.array(results)
             else:
                 return results  # list
         if hasattr(f, '__name__'):
