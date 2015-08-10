@@ -61,23 +61,28 @@ def crossing_indices(ts, c=0.0, d=0.0):
     return zc[which_zc]
 
 
-def mean_reversion_times(ts, d=0.0):
+def first_return_times(ts, c=None, d=0.0):
     """For a single variable time series, first wait until the time series
-    attains its mean value for the first time. Then record the time intervals 
-    between successive returns to the mean. 
+    attains the value c for the first time. Then record the time intervals 
+    between successive returns to c. If c is not given, the default is the mean
+    of the time series.
     
-    Returns:
-      array of time intervals (You can take the mean of these to find the
-      expected first return time to the mean)
-
     Args:
       ts: Timeseries (single variable)
 
-      d (float): Optional min distance from mean to be attained between returns
+      c (float): Optional target value (default is the mean of the time series)
+
+      d (float): Optional min distance from c to be attained between returns
+
+    Returns:
+      array of time intervals (Can take the mean of these to estimate the
+      expected first return time)
     """
     ts = np.squeeze(ts)
+    if c is None:
+        c = ts.mean()
     if ts.ndim <= 1:
-        return np.diff(ts.tspan[ts.crossing_indices(ts.mean(), d)])
+        return np.diff(ts.tspan[ts.crossing_indices(c, d)])
     else:
         return np.hstack(
-                ts[..., i].first_return_times(d) for i in range(ts.shape[-1]))
+            ts[..., i].first_return_times(c, d) for i in range(ts.shape[-1]))

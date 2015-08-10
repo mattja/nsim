@@ -12,6 +12,7 @@ nsim will look at y0 to determine what type of variable is being used.
 import nsim
 import numpy as np
 from distob import gather
+import matplotlib.pyplot as plt
 
 
 class Osc(nsim.SDEModel):
@@ -43,5 +44,12 @@ print('mean period is %g seconds' % phases.periods().mean())
 
 r = (ts - means).abs()
 r.plot(title='amplitude at each node')
-print('\namplitude mean reversion time is %g seconds' % 
-      r.mean_reversion_times().mean())
+
+# show distribution of mean reversion times
+rtimes = r.first_return_times(r.mean())
+plt.figure()
+plt.hist(rtimes, bins=150, range=(0.05, 2.9))
+plt.title('Distribution of mean reversion times for amplitude')
+plt.show(block=False)
+
+print('\nmean reversion time is %g seconds' % rtimes.mean())
