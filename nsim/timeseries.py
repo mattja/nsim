@@ -581,6 +581,7 @@ class Timeseries(np.ndarray):
 
     def std(self, axis=None, dtype=None, out=None, ddof=0):
         if (axis is 0 or 
+                axis is None or
                 self.ndim is 1 or 
                 isinstance(axis, _TupleType) and 0 in axis):
             return np.asarray(self).std(axis, dtype, out, ddof)
@@ -596,6 +597,7 @@ class Timeseries(np.ndarray):
 
     def var(self, axis=None, dtype=None, out=None, ddof=0):
         if (axis is 0 or 
+                axis is None or
                 self.ndim is 1 or 
                 isinstance(axis, _TupleType) and 0 in axis):
             return np.asarray(self).var(axis, dtype, out, ddof)
