@@ -4,6 +4,22 @@ nsim.analysesN package
 Submodules
 ----------
 
+nsim.analysesN.epochs module
+----------------------------
+
+.. automodule:: nsim.analysesN.epochs
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+nsim.analysesN.misc module
+--------------------------
+
+.. automodule:: nsim.analysesN.misc
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 nsim.analysesN.phase module
 ---------------------------
 

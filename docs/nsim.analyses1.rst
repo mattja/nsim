@@ -20,6 +20,14 @@ nsim.analyses1.freq module
     :undoc-members:
     :show-inheritance:
 
+nsim.analyses1.misc module
+--------------------------
+
+.. automodule:: nsim.analyses1.misc
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
 nsim.analyses1.phase module
 ---------------------------
 

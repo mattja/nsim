@@ -13,18 +13,18 @@ Subpackages
 Submodules
 ----------
 
-nsim.edf module
----------------
-
-.. automodule:: nsim.edf
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 nsim.nsim module
 ----------------
 
 .. automodule:: nsim.nsim
+    :members:
+    :undoc-members:
+    :show-inheritance:
+
+nsim.readfile module
+--------------------
+
+.. automodule:: nsim.readfile
     :members:
     :undoc-members:
     :show-inheritance:

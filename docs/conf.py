@@ -23,14 +23,14 @@ sys.path.insert(0, os.path.abspath('..'))
 # -- General configuration ------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
-#needs_sphinx = '1.0'
+needs_sphinx = '1.3'
 
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
     'sphinx.ext.autodoc',
-    'sphinxcontrib.napoleon',
+    'sphinx.ext.napoleon',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -47,7 +47,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = u'nsim'
-copyright = u'2014, Matthew J. Aburn'
+copyright = u'2015, Matthew J. Aburn'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
