@@ -520,11 +520,12 @@ class Timeseries(np.ndarray):
 
     def min(self, axis=None, out=None):
         if (axis is 0 or 
+                axis is None or
                 self.ndim is 1 or 
                 isinstance(axis, _TupleType) and 0 in axis):
             return np.asarray(self).min(axis, out)
         else:
-            ar = super(Timeseries, self).min(axis, dtype, out)
+            ar = super(Timeseries, self).min(axis, out)
             if isinstance(axis, numbers.Number):
                 axis = (axis,)
             new_labels = []
@@ -535,11 +536,12 @@ class Timeseries(np.ndarray):
 
     def max(self, axis=None, out=None):
         if (axis is 0 or 
+                axis is None or
                 self.ndim is 1 or 
                 isinstance(axis, _TupleType) and 0 in axis):
             return np.asarray(self).max(axis, out)
         else:
-            ar = super(Timeseries, self).max(axis, dtype, out)
+            ar = super(Timeseries, self).max(axis, out)
             if isinstance(axis, numbers.Number):
                 axis = (axis,)
             new_labels = []
@@ -550,11 +552,12 @@ class Timeseries(np.ndarray):
 
     def ptp(self, axis=None, out=None):
         if (axis is 0 or 
+                axis is None or
                 self.ndim is 1 or 
                 isinstance(axis, _TupleType) and 0 in axis):
             return np.asarray(self).ptp(axis, out)
         else:
-            ar = super(Timeseries, self).ptp(axis, dtype, out)
+            ar = super(Timeseries, self).ptp(axis, out)
             if isinstance(axis, numbers.Number):
                 axis = (axis,)
             new_labels = []
