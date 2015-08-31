@@ -63,5 +63,5 @@ setup(
         ],
     extras_require={'read_EDF_BDF_files': ['python-edf>=0.4'],
                     'read_all_files': ['python-biosig>=1.3'],
-                    'distributed_ufunc': ['numpy>=1.10']}
+                    'distributed_ufunc': ['numpy>=1.11']}
 )
