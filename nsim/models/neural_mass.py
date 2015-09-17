@@ -68,7 +68,7 @@ class JansenRit(SDEModel):
     # i.e. reduce noise by a factor of about 29
 
     # initial conditions
-    y0 = np.array([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.])
+    y0 = np.array([0., 0., 0., 0., 0., 0., 0., 0.])
 
     # N.B. scaling factor 2*e0 from Jansen1995 is moved to the definition of g1
     def S(self, y):
