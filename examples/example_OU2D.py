@@ -6,7 +6,7 @@ import distob
 import numpy as np
 
 
-class OU2D(nsim.SDEModel):
+class OU2D(nsim.ItoModel):
     A = np.array([[-0.5, -2.0],
                   [ 2.0, -1.0]])
     B = np.diag([0.5, 0.5])

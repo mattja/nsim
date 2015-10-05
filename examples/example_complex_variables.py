@@ -15,7 +15,7 @@ from distob import gather
 import matplotlib.pyplot as plt
 
 
-class Osc(nsim.SDEModel):
+class Osc(nsim.StratonovichModel):
     delta = 2.0
     epsilon = 100.0
     sigma = 10.0

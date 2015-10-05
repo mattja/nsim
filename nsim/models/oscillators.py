@@ -12,11 +12,11 @@ classes:
   Oscillator
 """
 
-from nsim import SDEModel
+from nsim import ItoModel
 import numpy as np
 from scipy import stats
 
-class Oscillator(SDEModel):
+class Oscillator(ItoModel):
     dimension = 2
     output_vars = [0]
 
@@ -37,7 +37,7 @@ class Oscillator(SDEModel):
         return np.diag([self.sigma1, self.sigma2])
 
 
-class Oscillator1D(SDEModel):
+class Oscillator1D(ItoModel):
     epsilon = 0.6
     sigma = 0.03
     y0 = np.array([0.])

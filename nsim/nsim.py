@@ -12,8 +12,10 @@ Classes:
 --------
 ``Model``   base class for different kinds of dynamical model
 ``ODEModel``   system of ordinary differential equations
-``SDEModel``   system of stochastic differential equations
-``DelaySDEModel``   system of delay stochastic differential equations
+``ItoModel``   system of Ito stochastic differential equations
+``StratonovichModel``  system of Stratonovich stochastic differential equations
+``DDEModel``   system of delay differential equations
+``DelayItoModel``   system of Ito stochastic delay differential equations
 
 ``Simulation``   single simulation run of a model, with simulation results
 
@@ -33,8 +35,8 @@ functions:
 
 from __future__ import absolute_import
 from .timeseries import Timeseries, _Timeslice
-from . import sde
 from . import analysesN
+import sdeint
 import distob
 from scipy import stats
 from scipy import integrate
@@ -779,9 +781,42 @@ class ODEModel(Model):
         pass
 
 
-class SDEModel(Model):
-    """Model defined by system of (ordinary) stochastic differential equations
-    dy = f(y, t) dt + G(y, t) dW  (N.B. currently must be in Stratonovich form)
+class ItoModel(Model):
+    """Model defined by system of Ito stochastic differential equations
+    dy = f(y, t) dt + G(y, t) dW
+
+    Attributes:
+      dimension (integer): Dimension of the state space
+      output_vars (list of integers): If i is in this list then y[i] is 
+        considered an output variable
+      f(y, t): deterministic part of Ito SDE system 
+      G(y, t): noise coefficient matrix of Ito SDE system 
+
+    Instance attributes:
+      y0 (array of shape (ndim,)): Initial state vector
+    """
+    dimension = 1
+    output_vars = [0]
+
+    def __init__(self):
+        super(ItoModel, self).__init__()
+        if not hasattr(self.__class__, 'y0'):
+            self.y0 = np.zeros(self.__class__.dimension)
+
+    def integrate(self, tspan):
+        ar = sdeint.itoint(self.f, self.G, self.y0, tspan)
+        return Timeseries(ar, tspan)
+
+    def f(y, t):
+        pass
+
+    def G(y, t):
+        pass
+
+
+class StratonovichModel(Model):
+    """Model defined by system of Stratonovich stochastic differential equations
+    dy = f(y, t) dt + G(y, t) \circ dW
 
     Attributes:
       dimension (integer): Dimension of the state space
@@ -797,12 +832,13 @@ class SDEModel(Model):
     output_vars = [0]
 
     def __init__(self):
-        super(SDEModel, self).__init__()
+        super(StratonovichModel, self).__init__()
         if not hasattr(self.__class__, 'y0'):
             self.y0 = np.zeros(self.__class__.dimension)
 
     def integrate(self, tspan):
-        return Timeseries(sde.sodeint(self.f, self.G, self.y0, tspan), tspan)
+        ar = sdeint.stratint(self.f, self.G, self.y0, tspan)
+        return Timeseries(ar, tspan)
 
     def f(y, t):
         pass
@@ -811,8 +847,14 @@ class SDEModel(Model):
         pass
 
 
-class DelaySDEModel(Model):
-    """Model defined by a system of stochastic delay differential equations
+class DDEModel(Model):
+    """Model defined by a system of delay differential equations
+    """
+    pass
+
+
+class DelayItoModel(Model):
+    """Model defined by a system of Ito stochastic delay differential equations
     """
     pass
 
@@ -1011,7 +1053,8 @@ def newsim(f, G, y0, name='NewModel', T=60.0, dt=0.005, repeat=1, identical=True
       f: callable(y, t) (defined in global scope) returning (n,) array
         Vector-valued function to define the deterministic part of the system 
       G: callable(y, t) (defined in global scope) returning (n,m) array
-        Optional matrix-valued function to define noise coefficients
+        Optional matrix-valued function to define noise coefficients of an Ito
+        SDE system.
       y0 (array):  Initial condition 
       name (str): Optional class name for the new model
       T: Total length of time to simulate, in seconds.
@@ -1044,6 +1087,7 @@ def newmodel(f, G, y0, name='NewModel'):
          Scalar or vector-valued function to define the deterministic part
       G: callable(y, t) (defined in global scope) returning (n,m) array
          Optional scalar or matrix-valued function to define noise coefficients
+         of an Ito SDE system.
       y0 (Number or array): Initial condition
       name (str): Optional class name for the new model
 
@@ -1063,7 +1107,7 @@ def newmodel(f, G, y0, name='NewModel'):
         newclass = type(name, (ODEModel,), dict())
         setattr(newclass, 'f', staticmethod(__clone_function(f, 'f')))
     else:
-        newclass = type(name, (SDEModel,), dict())
+        newclass = type(name, (ItoModel,), dict())
         setattr(newclass, 'f', staticmethod(__clone_function(f, 'f')))
         setattr(newclass, 'G', staticmethod(__clone_function(G, 'G')))
     setattr(newclass, 'y0', copy.deepcopy(y0))

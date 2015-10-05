@@ -12,12 +12,12 @@ classes:
   JansenRit
 """
 
-from nsim import SDEModel
+from nsim import StratonovichModel
 import numpy as np
 from scipy import stats
 
 
-class JansenRit(SDEModel):
+class JansenRit(StratonovichModel):
     """Jansen-Rit neural mass model of a small cortical region.
 
     By default, it simulates the model of Jansen and Rit (1995)

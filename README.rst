@@ -14,6 +14,7 @@ and to analyze the properties of the resulting timeseries.
 
 -  | Automatic parallel computing / cluster computing: For multiple or repeated simulations, nsim distributes these across a cluster (or across the CPUs of one computer) without needing to do any parallel programming.
    | (First start an IPython cluster e.g. by typing ``ipcluster start``)
+   Note: computation scales inefficiently in the current version, if the number of simulations is much greater than the number of CPUs, but will scale properly in future versions.
 
 -  Model parameters can optionally be specified as random distributions,
    instead of fixed values, to create multiple non-identical
@@ -32,12 +33,15 @@ and to analyze the properties of the resulting timeseries.
 
 TODO
 ----
+-  Currently parallel simulation and analysis scales poorly if the number of
+   simulations is much greater than the number of CPUs. This is a known issue
+   in the ``distob`` library to be fixed in its next release. Until this is 
+   fixed, you can use ``import distob; ts = distob.gather(ts)`` to work with 
+   a timeseries object ``ts`` locally instead of leaving it distributed on the 
+   cluster.
 
--  Write statistical analyses applying to ensembles of repeated SDE simulations
-
--  Directly support SDEs expressed in Ito form. (Currently need to write
-   it in Stratonovich form as an intermediate step before simulating in
-   nsim)
+-  Auto-generate multiple simulations covering a lattice of points in
+   parameter space, to run in parallel.
 
 -  Add support for models with time delays (DDEs and delay SDEs)
 
@@ -45,9 +49,6 @@ TODO
    of node dynamics and a network graph structure. (use shared memory
    and multiple CPU cores on each cluster host for simulation of network
    models, splitting degrees of freedom evenly across CPUs).
-
--  Auto-generate multiple simulations covering a lattice of points in
-   parameter space, to run in parallel.
 
 -  Optionally allow the equations to be specified and integrated in C,
    for speed
@@ -60,3 +61,8 @@ Incorporates extra time series analyses from Forrest Sheng Bao's
 
 ``IPython`` parallel computing, see:
 http://ipython.org/ipython-doc/dev/parallel/
+
+See also:
+---------
+
+``sdeint``: Library of SDE integration algorithms that is used by ``nsim`` to do the simulations.

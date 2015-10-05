@@ -1,6 +1,6 @@
 """This shows the simpler syntax for interactive use.  
 
-simulating Stratonovich SDE   dy = lam y dt + sigma (0.2 + y) dW
+simulating Ito SDE   dy = lam y dt + sigma (0.2 + y) dW
 """
 
 import nsim

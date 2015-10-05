@@ -12,12 +12,12 @@ classes:
   OU   1D Ornstein Uhlenbeck model
 """
 
-from nsim import SDEModel
+from nsim import ItoModel
 import numpy as np
 from scipy import stats
 
 
-class OU(SDEModel):
+class OU(ItoModel):
 
     dimension = 1
     output_vars = [0]

@@ -41,6 +41,7 @@ setup(
     author='Matthew J. Aburn',
     install_requires=['IPython>=2.1',
                       'distob>=0.2.0',
+                      'sdeint>=0.1.0',
                       'numpy>=1.6',
                       'scipy>=0.9',
                       'matplotlib>=1.1'],

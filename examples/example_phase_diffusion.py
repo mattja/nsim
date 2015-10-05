@@ -10,7 +10,7 @@ N.B. this one uses a fair bit of CPU to compute 1024 sample paths in parallel.
 import nsim
 import numpy as np
 
-class Oscillator1D(nsim.SDEModel):
+class Oscillator1D(nsim.StratonovichModel):
     epsilon = 0.6
     sigma = 0.03
     y0 = 0.0
