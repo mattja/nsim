@@ -29,14 +29,6 @@ nsim.readfile module
     :undoc-members:
     :show-inheritance:
 
-nsim.sde module
----------------
-
-.. automodule:: nsim.sde
-    :members:
-    :undoc-members:
-    :show-inheritance:
-
 nsim.timeseries module
 ----------------------
 
