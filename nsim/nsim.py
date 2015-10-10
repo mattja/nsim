@@ -1121,15 +1121,6 @@ def newmodel(f, G, y0, name='NewModel'):
         else:
             setattr(newclass, x, __AccessDicts(x, newclass.f.__globals__, 
                                                   newclass.G.__globals__))
-    # Allow passing in scalars as well. In this case convert to arrays here.
-    if isinstance(y0, numbers.Number):
-        setattr(newclass, 'y0', np.array([newclass.y0]))
-        scalarf, scalarG = newclass.f, newclass.G
-        setattr(newclass, 'f', 
-                staticmethod(lambda y, t: np.array([scalarf(y, t)])))
-        if G is not None:
-            setattr(newclass, 'G',
-                    staticmethod(lambda y, t: np.array([[scalarG(y, t)]])))
     # Put the new class into namespace __main__ (to cause dill to pickle it)
     newclass.__module__ = '__main__'
     import __main__
