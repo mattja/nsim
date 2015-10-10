@@ -34,6 +34,7 @@ class Oscillator(ItoModel):
         return ret
 
     def G(self, y, t):
+        # 2x2 matrix, with uncorrelated noise to the two variables
         return np.diag([self.sigma1, self.sigma2])
 
 

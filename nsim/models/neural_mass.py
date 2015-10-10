@@ -110,13 +110,13 @@ class JansenRit(StratonovichModel):
           t: number
              scalar time
         Returns:
-          (8,8) array
-          Only one matrix column is non-zero, meaning that in this example
-          we are modelling the noise input to pyramidal and spiny populations 
-          as fully correlated.
-          To simulate uncorrelated inputs instead, change [5,0] to [5,1].
+          (8,1) array
+          Only one matrix column, meaning that in this example we are modelling
+          the noise input to pyramidal and spiny populations as fully 
+          correlated.  To simulate uncorrelated inputs instead, use an array of
+          shape (8, 2) with the second noise element [5,1] instead of [5,0].
         """
-        ret = np.zeros((8, 8))
+        ret = np.zeros((8, 1))
         ret[4,0] = self.ke1 * self.He1 * self.u_sdev
         ret[5,0] = self.ke2 * self.He2 * self.p_sdev
         return ret
