@@ -1042,7 +1042,7 @@ class NetworkSim(MultipleSim):
     pass
 
 
-def newsim(f, G, y0, name='NewModel', T=60.0, dt=0.005, repeat=1, identical=True):
+def newsim(f, G, y0, name='NewModel', modelType=ItoModel, T=60.0, dt=0.005, repeat=1, identical=True):
     """Make a simulation of the system defined by functions f and G.
 
     dy = f(y,t)dt + G(y,t).dW with initial condition y0
@@ -1057,6 +1057,9 @@ def newsim(f, G, y0, name='NewModel', T=60.0, dt=0.005, repeat=1, identical=True
         SDE system.
       y0 (array):  Initial condition 
       name (str): Optional class name for the new model
+      modelType (type): The type of model to simulate. Must be a subclass of
+        nsim.Model, for example nsim.ODEModel, nsim.ItoModel or 
+        nsim.StratonovichModel. The default is nsim.ItoModel.
       T: Total length of time to simulate, in seconds.
       dt: Timestep for numerical integration.
       repeat (int, optional)
@@ -1068,14 +1071,14 @@ def newsim(f, G, y0, name='NewModel', T=60.0, dt=0.005, repeat=1, identical=True
     Raises:
       SimValueError, SimTypeError
     """
-    NewModel = newmodel(f, G, y0, name)
+    NewModel = newmodel(f, G, y0, name, modelType)
     if repeat == 1:
         return Simulation(NewModel(), T, dt)
     else:
         return RepeatedSim(NewModel, T, dt, repeat, identical)
 
 
-def newmodel(f, G, y0, name='NewModel'):
+def newmodel(f, G, y0, name='NewModel', modelType=ItoModel):
     """Use the functions f and G to define a new Model class for simulations. 
 
     It will take functions f and G from global scope and make a new Model class
@@ -1087,9 +1090,12 @@ def newmodel(f, G, y0, name='NewModel'):
          Scalar or vector-valued function to define the deterministic part
       G: callable(y, t) (defined in global scope) returning (n,m) array
          Optional scalar or matrix-valued function to define noise coefficients
-         of an Ito SDE system.
+         of a stochastic system. This should be ``None`` for an ODE system.
       y0 (Number or array): Initial condition
       name (str): Optional class name for the new model
+      modelType (type): The type of model to simulate. Must be a subclass of
+        nsim.Model, for example nsim.ODEModel, nsim.ItoModel or 
+        nsim.StratonovichModel. The default is nsim.ItoModel.
 
     Returns: 
       new class (subclass of Model)
@@ -1097,17 +1103,21 @@ def newmodel(f, G, y0, name='NewModel'):
     Raises:
       SimValueError, SimTypeError
     """
+    if not issubclass(modelType, Model):
+        raise SimTypeError('modelType must be a subclass of nsim.Model')
     if not callable(f) or (G is not None and not callable(G)):
         raise SimTypeError('f and G must be functions of y and t.')
     if G is not None and f.__globals__ is not G.__globals__:
         raise SimValueError('f and G must be defined in the same place')
     # TODO: validate that f and G are defined at global scope.
     # TODO: Handle nonlocals used in f,G so that we can lift this restriction.
-    if G is None:
+    if modelType is ODEModel and G is not None and not np.all(G == 0.0):
+        raise SimValueError('For an ODEModel, noise matrix G should be None')
+    if G is None or modelType is ODEModel:
         newclass = type(name, (ODEModel,), dict())
         setattr(newclass, 'f', staticmethod(__clone_function(f, 'f')))
     else:
-        newclass = type(name, (ItoModel,), dict())
+        newclass = type(name, (modelType,), dict())
         setattr(newclass, 'f', staticmethod(__clone_function(f, 'f')))
         setattr(newclass, 'G', staticmethod(__clone_function(G, 'G')))
     setattr(newclass, 'y0', copy.deepcopy(y0))
