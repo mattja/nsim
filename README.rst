@@ -12,9 +12,11 @@ continuous time with differential equations. nsim makes it easy to
 define and simulate these (including proper treatment of noise in SDEs)
 and to analyze the properties of the resulting timeseries.
 
--  | Automatic parallel computing / cluster computing: For multiple or repeated simulations, nsim distributes these across a cluster (or across the CPUs of one computer) without needing to do any parallel programming.
-   | (First start an IPython cluster e.g. by typing ``ipcluster start``)
-   Note: computation scales inefficiently in the current version, if the number of simulations is much greater than the number of CPUs, but will scale properly in future versions.
+-  | Automatic parallel computing / cluster computing: For multiple or repeated simulations, nsim distributes these across a cluster or Amazon EC2 cloud (or across the CPUs of one computer) without needing to do any parallel programming.
+   | (First configure an `IPython cluster <https://ipyparallel.readthedocs.org/en/latest/process.html#configuring-an-ipython-cluster>`_. e.g. on a single computer can type ``ipcluster start``)
+   | Note: computation scales poorly in the current version of nsim if the number of simulations is much greater than the number of CPUs, but this will be handled properly in future versions.
+
+- Now supports ODEs, scalar and vector Ito and Stratonovich SDEs (possibly with multiple driving noise processes) and can use a more recent order 1.0 strong stochastic Runge-Kutta algorithm (Rößler2010) for simulating the SDEs.
 
 -  Model parameters can optionally be specified as random distributions,
    instead of fixed values, to create multiple non-identical
@@ -65,4 +67,4 @@ http://ipython.org/ipython-doc/dev/parallel/
 See also:
 ---------
 
-``sdeint``: Library of SDE integration algorithms that is used by ``nsim`` to do the simulations.
+``sdeint``: Library of SDE integration algorithms that is used by ``nsim`` to do the simulations. https://github.com/mattja/sdeint
