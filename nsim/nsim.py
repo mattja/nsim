@@ -737,7 +737,12 @@ def _dts_from_da(da, tspan, labels):
 
 
 class Model(object):
-    """Base class for different kinds of dynamical systems"""
+    """Base class for different kinds of dynamical systems
+    Attributes:
+      integrator (list containing a single function): Which function to use by
+        default to integrate systems of this class.
+    """
+    integrator = [None] 
 
     def __init__(self):
         """When making each new instance from the Model, the constructor will 
@@ -750,7 +755,6 @@ class Model(object):
                 setattr(self, attrib, getattr(self, attrib).rvs())
 
     def integrate(self, tspan):
-        """numerical integration function to use"""
         pass 
 
 
@@ -762,10 +766,13 @@ class ODEModel(Model):
       output_vars (list of integers): If i is in this list then y[i] is 
         considered an output variable
       f(y, t): right hand side of the ODE system dy/dt = f(y, t)
+      integrator (list containing a single function): Which function to use by
+        default to integrate systems of this class.
 
     Instance attributes:
       y0 (array of shape (ndim,)): Initial state vector
     """
+    integrator = [integrate.odeint]
     dimension = 1
     output_vars = [0]
 
@@ -775,7 +782,7 @@ class ODEModel(Model):
             self.y0 = np.zeros(self.__class__.dimension)
 
     def integrate(self, tspan):
-        return Timeseries(integrate.odeint(self.f, self.y0, tspan), tspan)
+        return Timeseries(self.integrator[0](self.f, self.y0, tspan), tspan)
 
     def f(y, t):
         pass
@@ -791,10 +798,13 @@ class ItoModel(Model):
         considered an output variable
       f(y, t): deterministic part of Ito SDE system 
       G(y, t): noise coefficient matrix of Ito SDE system 
+      integrator (list containing a single function): Which function to use by
+        default to integrate systems of this class.
 
     Instance attributes:
       y0 (array of shape (ndim,)): Initial state vector
     """
+    integrator = [sdeint.itoint]
     dimension = 1
     output_vars = [0]
 
@@ -804,7 +814,7 @@ class ItoModel(Model):
             self.y0 = np.zeros(self.__class__.dimension)
 
     def integrate(self, tspan):
-        ar = sdeint.itoint(self.f, self.G, self.y0, tspan)
+        ar = self.integrator[0](self.f, self.G, self.y0, tspan)
         return Timeseries(ar, tspan)
 
     def f(y, t):
@@ -824,10 +834,13 @@ class StratonovichModel(Model):
         considered an output variable
       f(y, t): deterministic part of Stratonovich SDE system 
       G(y, t): noise coefficient matrix of Stratonovich SDE system 
+      integrator (list containing a single function): Which function to use by
+        default to integrate systems of this class.
 
     Instance attributes:
       y0 (array of shape (ndim,)): Initial state vector
     """
+    integrator = [sdeint.stratint]
     dimension = 1
     output_vars = [0]
 
@@ -837,7 +850,7 @@ class StratonovichModel(Model):
             self.y0 = np.zeros(self.__class__.dimension)
 
     def integrate(self, tspan):
-        ar = sdeint.stratint(self.f, self.G, self.y0, tspan)
+        ar = self.integrator[0](self.f, self.G, self.y0, tspan)
         return Timeseries(ar, tspan)
 
     def f(y, t):
@@ -871,17 +884,24 @@ class Simulation(object):
       output: Some function of the simulated timeseries, for example a 
         univariate time series of a single output variable. 
     """
-    def __init__(self, system, T=60.0, dt=0.005):
+    def __init__(self, system, T=60.0, dt=0.005, integrator=None):
         """
         Args:
           system (Model): The dynamical system to simulate
           T (Number, optional): Total length of time to simulate, in seconds.
           dt (Number, optional): Timestep for numerical integration.
+          integrator (callable, optional): Which numerical integration
+            algorithm to use. If None, the model's default algorithm will be
+            used. The integrator function should accept the same arguments as
+            the sdeint library, e.g. y = integrator(f, y0, tspan) for an ODE or
+            y = integrator(f, G, y0, tspan) for a SDE.
         """
         if isinstance(system, type):
             self.system = system()
         else:
             self.system = system
+        if integrator is not None:
+            self.system.integrator[0] = integrator
         self.T = T
         self.dt = dt
         self.__timeseries = None
@@ -936,16 +956,22 @@ class MultipleSim(object):
       timeseries: resulting timeseries: all variables of all simulations
       output: resulting timeseries: output variables of all simulations
     """
-    def __init__(self, systems, T=60.0, dt=0.005):
+    def __init__(self, systems, T=60.0, dt=0.005, integrator=None):
         """
         Args:
           systems: sequence of Model instances that should be simulated.
           T: total length of time to simulate, in seconds.
           dt: timestep for numerical integration.
+          integrator (callable, optional): Which numerical integration
+            algorithm to use. If None, the model's default algorithm will be
+            used. The integrator function should accept the same arguments as
+            the sdeint library, e.g. y = integrator(f, y0, tspan) for an ODE or
+            y = integrator(f, G, y0, tspan) for a SDE.
         """
         self.T = T
         self.dt = dt
-        self.sims = distob.scatter([Simulation(s, T, dt) for s in systems])
+        self.sims = distob.scatter(
+                [Simulation(s, T, dt, integrator) for s in systems])
         for s in self.sims:
             s.compute()
 
@@ -1002,7 +1028,8 @@ class RepeatedSim(MultipleSim):
       timeseries: resulting timeseries: all variables of all simulations
       output: resulting timeseries: output variables of all simulations
     """
-    def __init__(self, model, T=60.0, dt=0.005, repeat=1, identical=True):
+    def __init__(self, model, T=60.0, dt=0.005, repeat=1, identical=True,
+                 integrator=None):
         """
         Args:
           model: Can be either a Model subclass or Model instance. This 
@@ -1015,6 +1042,11 @@ class RepeatedSim(MultipleSim):
             different parameters drawn from the random distributions defined in 
             the Model class. If identical=True, the choice will be made once 
             and then all simulations done with identical parameters. 
+          integrator (callable, optional): Which numerical integration
+            algorithm to use. If None, the model's default algorithm will be
+            used. The integrator function should accept the same arguments as
+            the sdeint library, e.g. y = integrator(f, y0, tspan) for an ODE or
+            y = integrator(f, G, y0, tspan) for a SDE.
         """
         if isinstance(model, type):
             self.modelclass = model
@@ -1026,7 +1058,7 @@ class RepeatedSim(MultipleSim):
             systems = [copy.deepcopy(system) for i in range(repeat)]
         else:
             systems = [self.modelclass() for i in range(repeat)]
-        super(RepeatedSim, self).__init__(systems, T, dt)
+        super(RepeatedSim, self).__init__(systems, T, dt, integrator)
 
     def _node_labels(self):
         return ['repetition %d' % i for i in range(len(self.sims))]
