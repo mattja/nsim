@@ -739,10 +739,10 @@ def _dts_from_da(da, tspan, labels):
 class Model(object):
     """Base class for different kinds of dynamical systems
     Attributes:
-      integrator (list containing a single function): Which function to use by
-        default to integrate systems of this class.
+      integrator (sequence containing a single function): Which function to use
+        by default to integrate systems of this class.
     """
-    integrator = [None] 
+    integrator = (None,)
 
     def __init__(self):
         """When making each new instance from the Model, the constructor will 
@@ -766,13 +766,13 @@ class ODEModel(Model):
       output_vars (list of integers): If i is in this list then y[i] is 
         considered an output variable
       f(y, t): right hand side of the ODE system dy/dt = f(y, t)
-      integrator (list containing a single function): Which function to use by
-        default to integrate systems of this class.
+      integrator (sequence containing a single function): Which function to use
+        by default to integrate systems of this class.
 
     Instance attributes:
       y0 (array of shape (ndim,)): Initial state vector
     """
-    integrator = [integrate.odeint]
+    integrator = (integrate.odeint,)
     dimension = 1
     output_vars = [0]
 
@@ -798,13 +798,13 @@ class ItoModel(Model):
         considered an output variable
       f(y, t): deterministic part of Ito SDE system 
       G(y, t): noise coefficient matrix of Ito SDE system 
-      integrator (list containing a single function): Which function to use by
-        default to integrate systems of this class.
+      integrator (sequence containing a single function): Which function to use
+        by default to integrate systems of this class.
 
     Instance attributes:
       y0 (array of shape (ndim,)): Initial state vector
     """
-    integrator = [sdeint.itoint]
+    integrator = (sdeint.itoint,)
     dimension = 1
     output_vars = [0]
 
@@ -834,13 +834,13 @@ class StratonovichModel(Model):
         considered an output variable
       f(y, t): deterministic part of Stratonovich SDE system 
       G(y, t): noise coefficient matrix of Stratonovich SDE system 
-      integrator (list containing a single function): Which function to use by
-        default to integrate systems of this class.
+      integrator (sequence containing a single function): Which function to use
+        by default to integrate systems of this class.
 
     Instance attributes:
       y0 (array of shape (ndim,)): Initial state vector
     """
-    integrator = [sdeint.stratint]
+    integrator = (sdeint.stratint,)
     dimension = 1
     output_vars = [0]
 
@@ -901,7 +901,7 @@ class Simulation(object):
         else:
             self.system = system
         if integrator is not None:
-            self.system.integrator[0] = integrator
+            self.system.integrator = [integrator]
         self.T = T
         self.dt = dt
         self.__timeseries = None
