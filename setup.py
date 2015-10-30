@@ -53,6 +53,7 @@ setup(
     packages=['nsim', 'nsim.analyses1', 'nsim.analysesN', 'nsim.models'],
     platforms='any',
     zip_safe=False,
+    keywords=['simulation', 'ODE', 'SDE', 'SODE', 'time series'],
     classifiers = [
         'Programming Language :: Python',
         'Development Status :: 2 - Pre-Alpha',
