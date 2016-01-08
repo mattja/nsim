@@ -118,8 +118,9 @@ class RemoteTimeseries(distob.RemoteArray, object):
             tup = (tup,)
         if tup is (None,) or len(tup) is 0:
             return self
-        new_array = super(RemoteTimeseries, self).concatenate(tup, axis)
+        baretup = (self.view(np.ndarray),) + tuple(tup)
         tup = (self,) + tuple(tup)
+        new_array = distob.concatenate(baretup, axis)
         if not all(hasattr(ts, 'tspan') and
                    hasattr(ts, 'labels') for ts in tup):
             return new_array
@@ -181,11 +182,11 @@ class DistTimeseries(distob.DistArray):
         """Make a DistTimeseries from a list of existing remote Timeseries
 
         Args:
-          subts (list of RemoteTimeseries, or list of Ref to Timeseries): 
+          subts (list of RemoteTimeseries, or list of Ref to Timeseries):
             the sub-timeseries (possibly remote) which form the whole
-            DistTimeseries when concatenated. These must all have the same 
-            time points, shape and dtype. Currently must have 
-            `ts.shape[axis] == 1` for each sub-timeseries `ts`.
+            DistTimeseries when concatenated. These must all have the same
+            time points, dtype and must have the same shape excepting the
+            distributed axis.
 
           axis (int, optional): Position of the distributed axis, which is the
             axis along which the sub-timeseries will be concatenated. Default
@@ -238,7 +239,7 @@ class DistTimeseries(distob.DistArray):
             # let subarray obcaches and main obcache be views on same memory:
             for i in range(self._n):
                 ix = [slice(None)] * self.ndim
-                ix[ax] = slice(i, i+1)
+                ix[ax] = slice(self._si[i], self._si[i+1])
                 self._subarrays[i]._obcache = self._obcache[tuple(ix)]
             self._obcache_current = True
             # now prefer local processing:
@@ -378,6 +379,8 @@ class DistTimeseries(distob.DistArray):
             ix_arrays = [index[i] for i in fancy_pos]
             ix_arrays = np.broadcast_arrays(*ix_arrays)
             for j in range(len(fancy_pos)):
+                if ix_arrays[j].shape is ():
+                    ix_arrays[j] = np.expand_dims(ix_arrays[j], 0)
                 index[fancy_pos[j]] = ix_arrays[j]
             index = tuple(index)
             ishape = index[fancy_pos[0]].shape # common shape all index arrays
@@ -717,6 +720,7 @@ def _rts_from_ra(ra, tspan, labels, block=True):
     return distob.call(
             _convert, ra, tspan, labels, prefer_local=False, block=block)
 
+
 def _dts_from_da(da, tspan, labels):
     """construct a DistTimeseries from a DistArray"""
     sublabels = labels[:]
@@ -725,7 +729,9 @@ def _dts_from_da(da, tspan, labels):
         if isinstance(ra, RemoteTimeseries):
             new_subarrays.append(ra)
         else:
-            sublabels[da._distaxis] = [labels[da._distaxis][i]]
+            if labels[da._distaxis]:
+                sublabels[da._distaxis] = labels[da._distaxis][
+                        da._si[i]:da._si[i+1]]
             new_subarrays.append(_rts_from_ra(ra, tspan, sublabels, False))
     new_subarrays = [distob.convert_result(ar) for ar in new_subarrays]
     da._subarrays = new_subarrays

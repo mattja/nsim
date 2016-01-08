@@ -274,6 +274,8 @@ class Timeseries(np.ndarray):
             ix_arrays = [index[i] for i in fancy_pos]
             ix_arrays = np.broadcast_arrays(*ix_arrays)
             for j in range(len(fancy_pos)):
+                if ix_arrays[j].shape is ():
+                    ix_arrays[j] = np.expand_dims(ix_arrays[j], 0)
                 index[fancy_pos[j]] = ix_arrays[j]
             index = tuple(index)
             ishape = index[fancy_pos[0]].shape # common shape all index arrays
@@ -428,7 +430,7 @@ class Timeseries(np.ndarray):
         super(Timeseries, self).__setstate__(tsstate[0])
         self.__dict__.update(tsstate[1])
 
-    def __distob_scatter__(self, axis=-1, destination=None):
+    def __distob_scatter__(self, axis=-1, destination=None, blocksize=None):
         """Turn a Timeseries into a distributed timeseries"""
         import distob
         from nsim import DistTimeseries
@@ -438,7 +440,8 @@ class Timeseries(np.ndarray):
             raise ValueError(u'Currently cannot distribute the time axis')
         if axis < 0:
             axis = self.ndim + axis
-        dar = distob.distob._scatter_ndarray(self, axis, destination)
+        dar = distob.distob._scatter_ndarray(self, axis,
+                                             destination, blocksize)
         axlabels = self.labels[axis]
         return DistTimeseries([rts for rts in dar._subarrays], axis, axlabels)
 
