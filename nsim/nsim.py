@@ -19,7 +19,8 @@ Classes:
 
 ``Simulation``   single simulation run of a model, with simulation results
 
-``MultipleSim``    set of simulations, distributed.
+``MultipleSim``   set of simulations, running on a single engine
+``DistSim``       set of simulations distributed across multiple engines
 ``RepeatedSim``   repeated simulations of the same model (to get statistics)
 ``ParameterSim``  multiple simulations of a model exploring parameter space
 ``NetworkSim``    simulate many instances of a model coupled in a network
@@ -200,9 +201,11 @@ class DistTimeseries(distob.DistArray):
             raise SimValueError(u'Currently cannot distribute the time axis')
         if axislabels is not None and not isinstance(axislabels, Sequence):
             raise SimValueError(u'axislabels should be a list of str')
-        if axislabels is not None and len(axislabels) != len(subts):
-            raise SimValueError(u'mismatch: %d subarrays but %d axislabels' % (
-                len(subts), len(axislabels)))
+        dist_length = sum(ts.shape[axis] for ts in subts)
+        if (axislabels is not None and len(axislabels) != dist_length):
+            raise SimValueError(
+                    u'mismatch: got %d axislabels for axis %d of length %d' % (
+                        len(axislabels), axis, dist_length))
         super(DistTimeseries, self).__init__(subts, axis)
         self.tspan = distob.gather(self._subarrays[0].tspan)
         # Expensive to validate all tspans are the same. check start and end t
@@ -918,31 +921,8 @@ class Simulation(object):
     output = property(fget=__get_output, doc="Simulated model output")
 
 
-# TODO can remove this class after distob proxy methods support block=False
-@distob.proxy_methods(Simulation)
-class RemoteSimulation(distob.Remote, Simulation):
-    """Local object representing a remote Simulation"""
-    def __init__(self, ref):
-        """Make a RemoteSimulation to access an already-existing Simulation 
-        object, which may be on a remote engine.
-
-        Args:
-          ref (Ref): reference to a Simulation to be controlled by this proxy
-        """
-        super(RemoteSimulation, self).__init__(ref)
-        #self.compute()
-
-    def compute(self):
-        """Start the computation process asynchronously"""
-        from distob import methodcall
-        methodcall(self, 'compute', prefer_local=False, block=False)
-        #def remote_compute(sim_id):
-        #    distob.engine[sim_id].compute()
-        #self._dv.apply_async(remote_compute, self._id)
-
-
 class MultipleSim(object):
-    """Represents multiple simulations, possibly running on different hosts
+    """Represents multiple simulations, on a single host
 
     Like a list, indexing with [i] gives access to the ith simulation
 
@@ -964,8 +944,9 @@ class MultipleSim(object):
         """
         self.T = T
         self.dt = dt
-        self.sims = distob.scatter(
-                [Simulation(s, T, dt, integrator) for s in systems])
+        self.sims = [Simulation(s, T, dt, integrator) for s in systems]
+
+    def compute(self):
         for s in self.sims:
             s.compute()
 
@@ -976,7 +957,12 @@ class MultipleSim(object):
         return self.sims[key]
 
     def _repr_pretty_(self, p, cycle):
-        return p.pretty(self.sims)
+        with p.group(2, '%s([\n' % self.__class__.__name__, '])'):
+            for i in range(len(self.sims)):
+                if i:
+                    p.text(',\n')
+                p.text('<%s at %s>' % (self.sims[i].__class__.__name__,
+                                       hex(id(self.sims[i]))))
 
     def _node_labels(self):
         return ['node %d' % i for i in range(len(self.sims))]
@@ -985,34 +971,257 @@ class MultipleSim(object):
         subts = [s.timeseries for s in self.sims]
         sub_ndim = subts[0].ndim
         if sub_ndim is 1:
-            subts = [distob.expand_dims(rts, 1) for rts in subts]
+            subts = [distob.expand_dims(ts, 1) for ts in subts]
             sub_ndim += 1
-        distaxis = sub_ndim
-        subts = [distob.expand_dims(rts, distaxis) for rts in subts]
-        return DistTimeseries(subts, distaxis, self._node_labels())
+        nodeaxis = sub_ndim
+        subts = [distob.expand_dims(ts, nodeaxis) for ts in subts]
+        ts = subts[0].concatenate(subts[1:], axis=nodeaxis)
+        ts.labels[nodeaxis] = self._node_labels()
+        return ts
 
     timeseries = property(fget=__get_timeseries, doc="Rank 3 array representing"
-        " multiple time series. 1st axis is time, 2nd axis ranges across all"
-        " dynamical variables in a single simulation, 3rd axis ranges across"
+        " multiple time series. Axis 0 is time, axis 1 ranges across all"
+        " dynamical variables in a single simulation, axis 2 ranges across"
         " different simulation instances.")
 
     def __get_output(self):
         subts = [s.output for s in self.sims]
         sub_ndim = subts[0].ndim
         if sub_ndim is 1:
-            subts = [distob.expand_dims(rts, 1) for rts in subts]
+            subts = [distob.expand_dims(ts, 1) for ts in subts]
             sub_ndim += 1
-        distaxis = sub_ndim
-        subts = [distob.expand_dims(rts, distaxis) for rts in subts]
-        return DistTimeseries(subts, distaxis, self._node_labels())
+        nodeaxis = sub_ndim
+        subts = [distob.expand_dims(ts, nodeaxis) for ts in subts]
+        ts = subts[0].concatenate(subts[1:], axis=nodeaxis)
+        ts.labels[nodeaxis] = self._node_labels()
+        return ts
 
     output = property(fget=__get_output, doc="Rank 3 array representing"
-        " output time series. 1st axis is time, 2nd axis ranges across"
-        " output variables of a single simulation, 3rd axis ranges across"
+        " output time series. Axis 0 is time, axis 1 ranges across"
+        " output variables of a single simulation, axis 2 ranges across"
         " different simulation instances.")
 
 
-class RepeatedSim(MultipleSim):
+@distob.proxy_methods(Simulation)
+class RemoteSimulation(distob.Remote, Simulation):
+    """Local object representing a remote Simulation"""
+    def __init__(self, ref):
+        """Make a RemoteSimulation to access an already-existing Simulation 
+        object, which may be on a remote engine.
+
+        Args:
+          ref (Ref): reference to a Simulation to be controlled by this proxy
+        """
+        super(RemoteSimulation, self).__init__(ref)
+
+    def compute(self):
+        """Start the computation process asynchronously"""
+        from distob import methodcall
+        methodcall(self, 'compute', prefer_local=False, block=False)
+
+    def __repr__(self):
+        return '<%s %s on engine %d>' % (
+                self.__class__.__name__, hex(self._id[0]), self._id[1])
+
+
+@distob.proxy_methods(MultipleSim, include_underscore=('__getitem__',))
+class RemoteMultipleSim(distob.Remote, MultipleSim):
+    """Local object representing a remote MultipleSim"""
+    def __init__(self, ref):
+        """Make a RemoteMultipleSim to access an already-existing MultipleSim
+        object, which may be on a remote engine.
+
+        Args:
+          ref (Ref): reference to a MultipleSim to be controlled by this proxy
+        """
+        super(RemoteMultipleSim, self).__init__(ref)
+
+    def compute(self):
+        """Start the computation process asynchronously"""
+        from distob import methodcall
+        methodcall(self, 'compute', prefer_local=False, block=False)
+
+    def _repr_pretty_(self, p, cycle):
+        with p.group(2, '%s([\n' % self.__class__.__name__, '])'):
+            for i in range(len(self)):
+                if i:
+                    p.text(',\n')
+                p.text('<Simulation at %s on engine %d>' % (
+                        hex(id(self.sims[i])), self._id[1])) 
+
+
+class DistSim(object):
+    """Represents multiple simulations distributed on multiple compute engines
+
+    Like a list, indexing with [i] gives access to the ith simulation
+
+    Attributes:
+      timeseries: resulting timeseries: all variables of all simulations
+      output: resulting timeseries: output variables of all simulations
+    """
+    def __init__(self, systems, T=60.0, dt=0.005, integrator=None):
+        """
+        Args:
+          systems: sequence of Model instances that should be simulated.
+          T: total length of time to simulate, in seconds.
+          dt: timestep for numerical integration.
+          integrator (callable, optional): Which numerical integration
+            algorithm to use. If None, the model's default algorithm will be
+            used. The integrator function should accept the same arguments as
+            the sdeint library, e.g. y = integrator(f, y0, tspan) for an ODE or
+            y = integrator(f, G, y0, tspan) for a SDE.
+        """
+        self.T = T
+        self.dt = dt
+        self._n = len(systems)
+        n = self._n
+        if n == 1:
+            return distob.scatter(Simulation(systems[0], T, dt, integrator))
+        if distob.engine is None:
+            distob.setup_engines()
+        ne = distob.engine.nengines
+        blocksize = ((n - 1) // ne) + 1
+        if blocksize > n:
+            blocksize = n
+        self._subsims = []
+        sublengths = []
+        si = [0]
+        low = 0
+        for i in range(0, n // blocksize):
+            high = low + blocksize
+            self._subsims.append(
+                    MultipleSim(systems[low:high], T, dt, integrator))
+            sublengths.append(blocksize)
+            si.append(si[-1] + sublengths[-1])
+            low += blocksize
+        if n % blocksize != 0:
+            high = low + (n % blocksize)
+            self._subsims.append(
+                    MultipleSim(systems[low:high], T, dt, integrator))
+            sublengths.append(high - low)
+            si.append(si[-1] + sublengths[-1])
+        self._sublengths = tuple(sublengths)
+        self._si = tuple(si)
+        # a surragate ndarray to help with slicing
+        self._placeholders = np.arange(n, dtype=int)
+        # distribute them on cluster and start computation:
+        self._subsims = distob.scatter(self._subsims)
+        for rms in self._subsims:
+            rms.compute()
+
+    def __len__(self):
+        return self._n
+
+    def _tosub(self, ix):
+        """Given an integer index ix into the list of sims, returns the pair
+        (s, m) where s is the relevant subsim and m is the subindex into s.
+        So self[ix] == self._subsims[s][m]
+        """
+        N = self._n
+        if ix >= N or ix < -N:
+            raise IndexError(
+                    'index %d out of bounds for list of %d sims' % (ix, N))
+        if ix < 0:
+            ix += N
+        for s in range(0, self._n):
+            if self._si[s + 1] - 1 >= ix:
+                break
+        m = ix - self._si[s]
+        return s, m
+
+    def _tosubs(self, ixlist):
+        """Maps a list of integer indices to sub-indices.
+        ixlist can contain repeated indices and does not need to be sorted.
+        Returns pair (ss, ms) where ss is a list of subsim numbers and ms is a
+        list of lists of subindices m (one list for each subsim in ss).
+        """
+        n = len(ixlist)
+        N = self._n
+        ss = []
+        ms = []
+        j = 0 # the position in ixlist currently being processed
+        ix = ixlist[j]
+        if ix >= N or ix < -N:
+            raise IndexError(
+                    'index %d out of bounds for list of %d sims' % (ix, N))
+        if ix < 0:
+            ix += N
+        while j < n:
+            for s in range(0, self._n):
+                low = self._si[s]
+                high = self._si[s + 1]
+                if ix >= low and ix < high:
+                    ss.append(s)
+                    msj = [ix - low]
+                    j += 1
+                    while j < n:
+                        ix = ixlist[j]
+                        if ix >= N or ix < -N:
+                            raise IndexError(
+                              'index %d out of bounds for list of %d sims' % (
+                                ix, N))
+                        if ix < 0:
+                            ix += N
+                        if ix < low or ix >= high:
+                            break
+                        msj.append(ix - low)
+                        j += 1
+                    ms.append(msj)
+                if ix < low:
+                    break
+        return ss, ms
+
+    def __getitem__(self, key):
+        ixlist = self._placeholders[key]
+        if isinstance(ixlist, numbers.Number):
+            s, i = self._tosub(ixlist)
+            return self._subsims[s][i]
+        remotesims = []
+        ss, ms = self._tosubs(ixlist)
+        for s, m in zip(ss, mm):
+            remotesims.append(self._subsims[s][m])
+        if len(remotesims) is 1:
+            return remotesims[0]
+        else:
+            return remotesims
+
+    def _repr_pretty_(self, p, cycle):
+        with p.group(2, '%s([\n' % self.__class__.__name__, '])'):
+            for i in range(len(self._subsims)):
+                if i:
+                    p.text(',\n')
+                for j in range(len(self._subsims[i])):
+                    if j:
+                        p.text(',\n')
+                    p.text('<Simulation at %s on engine %d>' % (
+                            hex(id(self._subsims[i].sims[j])),
+                            self._subsims[i]._id[1])) 
+
+    def _node_labels(self):
+        return ['node %d' % i for i in range(self._n)]
+
+    def __get_timeseries(self):
+        subts = [rms.timeseries for rms in self._subsims]
+        distaxis = subts[0].ndim - 1
+        return DistTimeseries(subts, distaxis, self._node_labels())
+
+    timeseries = property(fget=__get_timeseries, doc="Rank 3 array representing"
+        " multiple time series. Axis 0 is time, axis 1 ranges across all"
+        " dynamical variables in a single simulation, axis 2 ranges across"
+        " different simulation instances.")
+
+    def __get_output(self):
+        subts = [rms.output for rms in self._subsims]
+        distaxis = subts[0].ndim - 1
+        return DistTimeseries(subts, distaxis, self._node_labels())
+
+    output = property(fget=__get_output, doc="Rank 3 array representing"
+        " output time series. Axis 0 is time, axis 1 ranges across"
+        " output variables of a single simulation, axis 2 ranges across"
+        " different simulation instances.")
+
+
+class RepeatedSim(DistSim):
     """Independent simulations of the same model multiple times, with results.
 
     Like a list, indexing the object with [i] gives access to the ith simulation
@@ -1055,15 +1264,15 @@ class RepeatedSim(MultipleSim):
         super(RepeatedSim, self).__init__(systems, T, dt, integrator)
 
     def _node_labels(self):
-        return ['repetition %d' % i for i in range(len(self.sims))]
+        return ['repetition %d' % i for i in range(self._n)]
 
 
-class ParameterSim(MultipleSim):
+class ParameterSim(DistSim):
     """Independent simulations of a model exploring different parameters"""
     pass
 
 
-class NetworkSim(MultipleSim):
+class NetworkSim(Simulation):
     """Simulation of many coupled instances of a model connected in a network"""
     pass
 
