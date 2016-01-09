@@ -956,17 +956,21 @@ class MultipleSim(object):
     def __getitem__(self, key):
         return self.sims[key]
 
-    def _repr_pretty_(self, p, cycle):
-        with p.group(2, '%s([\n' % self.__class__.__name__, '])'):
-            for i in range(len(self.sims)):
-                if i:
-                    p.text(',\n')
-                p.text('<%s at %s>' % (self.sims[i].__class__.__name__,
-                                       hex(id(self.sims[i]))))
+    def _ids(self):
+        return tuple(id(sim) for sim in self.sims)
+ 
+    def __repr__(self):
+        s = '%s([\n' % self.__class__.__name__
+        for i in range(len(self)):
+            if i:
+                s += ',\n'
+            s += '<%s at %s>' % (self.sims[i].__class__.__name__,
+                                 hex(self._ids()[i]))
+        return s + '])'
 
     def _node_labels(self):
         return ['node %d' % i for i in range(len(self.sims))]
-
+   
     def __get_timeseries(self):
         subts = [s.timeseries for s in self.sims]
         sub_ndim = subts[0].ndim
@@ -1020,11 +1024,11 @@ class RemoteSimulation(distob.Remote, Simulation):
         methodcall(self, 'compute', prefer_local=False, block=False)
 
     def __repr__(self):
-        return '<%s %s on engine %d>' % (
+        return '<%s at %s on engine %d>' % (
                 self.__class__.__name__, hex(self._id[0]), self._id[1])
 
 
-@distob.proxy_methods(MultipleSim, include_underscore=('__getitem__',))
+@distob.proxy_methods(MultipleSim, include_underscore=('__getitem__', '_ids'))
 class RemoteMultipleSim(distob.Remote, MultipleSim):
     """Local object representing a remote MultipleSim"""
     def __init__(self, ref):
@@ -1041,13 +1045,14 @@ class RemoteMultipleSim(distob.Remote, MultipleSim):
         from distob import methodcall
         methodcall(self, 'compute', prefer_local=False, block=False)
 
-    def _repr_pretty_(self, p, cycle):
-        with p.group(2, '%s([\n' % self.__class__.__name__, '])'):
-            for i in range(len(self)):
-                if i:
-                    p.text(',\n')
-                p.text('<Simulation at %s on engine %d>' % (
-                        hex(id(self.sims[i])), self._id[1])) 
+    def __repr__(self):
+        s = '%s([\n' % self.__class__.__name__
+        for i in range(len(self)):
+            if i:
+                s += ',\n'
+            s += '<RemoteSimulation at %s on engine %d>' % (
+                    hex(self._ids()[i]), self._id[1])
+        return s + '])'
 
 
 class DistSim(object):
@@ -1185,17 +1190,16 @@ class DistSim(object):
         else:
             return remotesims
 
-    def _repr_pretty_(self, p, cycle):
-        with p.group(2, '%s([\n' % self.__class__.__name__, '])'):
-            for i in range(len(self._subsims)):
-                if i:
-                    p.text(',\n')
-                for j in range(len(self._subsims[i])):
-                    if j:
-                        p.text(',\n')
-                    p.text('<Simulation at %s on engine %d>' % (
-                            hex(id(self._subsims[i].sims[j])),
-                            self._subsims[i]._id[1])) 
+    def __repr__(self):
+        s = '%s([\n' % self.__class__.__name__
+        for i in range(len(self._subsims)):
+            if i:
+                s += ',\n'
+            s += '<%s at %s on engine %d (sims %d to %d)>' % (
+                    self._subsims[i].__class__.__name__,
+                    hex(self._subsims[i]._id[0]), self._subsims[i]._id[1],
+                    self._si[i], self._si[i+1] - 1)
+        return s + '])'
 
     def _node_labels(self):
         return ['node %d' % i for i in range(self._n)]
