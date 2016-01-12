@@ -559,40 +559,28 @@ class DistTimeseries(distob.DistArray):
             sub-timeseries)
         """
         # TODO: shares much code with the superclass method. refactor.
-        def _reduced_f(a, distaxis, *args, **kwargs):
-            """(Executed on a remote or local engine) Remove specified axis
-            from array `a` and then apply f to it"""
-            remove_axis = ((slice(None),)*(distaxis) + (0,) +
-                           (slice(None),)*(a.ndim - distaxis - 1))
-            return f(a[remove_axis], *args, **kwargs)
         def vf(self, *args, **kwargs):
             kwargs = kwargs.copy()
             kwargs['block'] = False
             kwargs['prefer_local'] = False
-            ars = [distob.call(_reduced_f, ra, self._distaxis, 
-                               *args, **kwargs) for ra in self._subarrays]
+            ars = [distob.call(
+                    f, ra, *args, **kwargs) for ra in self._subarrays]
             results = [distob.convert_result(ar) for ar in ars]
-            if (all(isinstance(r, distob.RemoteArray) for r in results) and
-                    all(r.shape == results[0].shape for r in results)):
-                # Then we can join the results and return a DistArray.
-                # To position result distaxis, match input shape where possible
-                old_subshape = (self.shape[0:self._distaxis] +
-                                self.shape[(self._distaxis+1):])
-                res_subshape = list(results[0].shape)
-                pos = len(res_subshape)
-                for i in range(len(old_subshape)):
-                    n = old_subshape[i]
-                    if n not in res_subshape:
-                        continue
-                    pos = res_subshape.index(n)
-                    res_subshape[pos] = None
-                    if i >= self._distaxis:
-                        break
-                    pos += 1
-                new_distaxis = pos
-                results = [r.expand_dims(new_distaxis) for r in results]
+            if all(isinstance(r, distob.RemoteArray) and
+                    r.ndim == results[0].ndim for r in results):
+                # Then we will join the results and return a DistArray.
+                out_shapes = [ra.shape for ra in results]
+                new_distaxis = self._new_distaxis(out_shapes)
+                if new_distaxis is None:
+                    return results # incompatible array shapes. return a list.
+                if new_distaxis == results[0].ndim:
+                    results = [r.expand_dims(new_distaxis) for r in results]
                 if all(isinstance(r, RemoteTimeseries) for r in results):
-                    axlabels = self.labels[self._distaxis]
+                    if (sum(r.shape[new_distaxis] for r in results) ==
+                            self.shape[self._distaxis]):
+                        axlabels = self.labels[self._distaxis]
+                    else:
+                        axlabels = None
                     try:
                        return DistTimeseries(results, new_distaxis, axlabels)
                     except SimValueError:
@@ -601,7 +589,7 @@ class DistTimeseries(distob.DistArray):
             elif all(isinstance(r, numbers.Number) for r in results):
                 return np.array(results)
             else:
-                return results  # list
+                return results  # not arrays or numbers. return a list
         if hasattr(f, '__name__'):
             vf.__name__ = 'v' + f.__name__
             f_str = f.__name__ + '()'
