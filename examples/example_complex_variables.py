@@ -11,7 +11,6 @@ nsim will look at y0 to determine what type of variable is being used.
 
 import nsim
 import numpy as np
-from distob import gather
 import matplotlib.pyplot as plt
 
 

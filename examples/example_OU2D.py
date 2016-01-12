@@ -2,7 +2,6 @@
 """
 
 import nsim
-import distob
 import numpy as np
 
 

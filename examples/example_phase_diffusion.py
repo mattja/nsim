@@ -4,7 +4,7 @@ dphi = (1 + epsilon cos(phi)) dt + sigma dW
 Plots some figures showing how the circular standard deviation of the phase 
 does not necessarily increase monotonically.
 
-N.B. this one uses a fair bit of CPU to compute 1024 sample paths in parallel.
+N.B. this one uses a fair bit of CPU to compute 256 sample paths in parallel.
 """
 
 import nsim
