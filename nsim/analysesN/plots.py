@@ -55,7 +55,7 @@ def phase_histogram(dts, times, nbins=30, colormap=mpl.cm.Blues):
     for i in xrange(nplots):
         index = indices[i]
         time = dts.tspan[index]
-        phases = distob.gather(dts[index, 0, :])
+        phases = distob.gather(dts.mod2pi()[index, 0, :])
         ax = fig.add_subplot(1, nplots, i + 1, projection='polar')
         n[:,i], bins, patches = ax.hist(phases, nbins, (-np.pi, np.pi), 
                                         normed=True, histtype='bar')
