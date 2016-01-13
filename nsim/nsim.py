@@ -619,7 +619,7 @@ class DistTimeseries(distob.DistArray):
         else:
             subaxis = axis - 1
             new_distaxis = self._distaxis
-        new_subts = [expand_dims(rts, subaxis) for rts in self._subarrays]
+        new_subts = [rts.expand_dims(subaxis) for rts in self._subarrays]
         if axis == 0:
             # prepended an axis: no longer a Timeseries
             return distob.DistArray(new_subts, new_distaxis)

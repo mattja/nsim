@@ -507,9 +507,9 @@ class Timeseries(np.ndarray):
         if (newshape is -1 and len(oldshape) is 1 or
                 (isinstance(newshape, numbers.Integral) and 
                     newshape == oldshape[0]) or 
-                (isinstance(newshape, _TupleType) and 
-                    (newshape[0] == oldshape[0] or 
-                     (newshape[0] is -1 and np.array(oldshape[1:]).prod() == 
+                (isinstance(newshape, Sequence) and
+                    (newshape[0] == oldshape[0] or
+                     (newshape[0] is -1 and np.array(oldshape[1:]).prod() ==
                                             np.array(newshape[1:]).prod())))):
             # then axis 0 is unaffected by the reshape
             newlabels = [None] * ar.ndim
@@ -635,6 +635,8 @@ class Timeseries(np.ndarray):
         Args:
           axis (int): Position (amongst axes) where new axis is to be inserted.
         """
+        if axis == -1:
+            axis = self.ndim
         array = np.expand_dims(self, axis)
         if axis == 0:
             # prepended an axis: no longer a Timeseries
