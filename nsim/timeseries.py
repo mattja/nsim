@@ -569,12 +569,22 @@ class Timeseries(np.ndarray):
                     new_labels.append(self.labels[i])
             return Timeseries(ar, self.tspan, new_labels)
 
-    def mean(self, axis=None, dtype=None, out=None):
+    def mean(self, axis=None, dtype=None, out=None, keepdims=False):
+        if axis == -1:
+            axis = self.ndim
+        if keepdims:
+            if axis is None:
+                out_shape = [1] * self.ndim
+            else:
+                out_shape = list(self.shape)
+                out_shape[axis] = 1
         if (axis is 0 or 
                 axis is None or
                 self.ndim is 1 or 
                 isinstance(axis, _TupleType) and 0 in axis):
-            return np.asarray(self).mean(axis, dtype, out)
+            res = np.asarray(self).mean(axis, dtype, out)
+            if keepdims:
+                res = res.reshape(out_shape)
         else:
             ar = super(Timeseries, self).mean(axis, dtype, out)
             if isinstance(axis, numbers.Number):
@@ -583,7 +593,10 @@ class Timeseries(np.ndarray):
             for i in range(self.ndim):
                 if i not in axis:
                     new_labels.append(self.labels[i])
-            return Timeseries(ar, self.tspan, new_labels)
+            res = Timeseries(ar, self.tspan, new_labels)
+            if keepdims:
+                res = res.reshape(out_shape)
+        return res
 
     def std(self, axis=None, dtype=None, out=None, ddof=0):
         if (axis is 0 or 
