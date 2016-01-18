@@ -1144,6 +1144,8 @@ class DistSim(object):
         N = self._n
         ss = []
         ms = []
+        if n == 0:
+            return ss, ms
         j = 0 # the position in ixlist currently being processed
         ix = ixlist[j]
         if ix >= N or ix < -N:
