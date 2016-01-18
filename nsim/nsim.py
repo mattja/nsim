@@ -1,4 +1,4 @@
-# Copyright 2014 Matthew J. Aburn
+# Copyright 2016 Matthew J. Aburn
 # 
 # This program is free software: you can redistribute it and/or modify 
 # it under the terms of the GNU General Public License as published by 
@@ -19,8 +19,6 @@ Classes:
 
 ``Simulation``   single simulation run of a model, with simulation results
 
-``MultipleSim``   set of simulations, running on a single engine
-``DistSim``       set of simulations distributed across multiple engines
 ``RepeatedSim``   repeated simulations of the same model (to get statistics)
 ``ParameterSim``  multiple simulations of a model exploring parameter space
 ``NetworkSim``    simulate many instances of a model coupled in a network
@@ -760,28 +758,40 @@ class ODEModel(Model):
 
     Attributes:
       dimension (integer): Dimension of the state space
+      input_vars (list of integers): If i is in this list then y[i] is 
+        considered an input variable
       output_vars (list of integers): If i is in this list then y[i] is 
         considered an output variable
-      f(y, t): right hand side of the ODE system dy/dt = f(y, t)
+      y0 (array of shape (dimension,)): Initial state
       integrator (sequence containing a single function): Which function to use
-        by default to integrate systems of this class.
-
-    Instance attributes:
-      y0 (array of shape (ndim,)): Initial state vector
+        by default to integrate systems of this class
+    Methods:
+      f(y, t): right hand side of the ODE system dy/dt = f(y, t)
     """
-    integrator = (integrate.odeint,)
     dimension = 1
-    output_vars = [0]
+    input_vars = range(dimension)
+    output_vars = range(dimension)
+    y0 = np.zeros(dimension)
+    integrator = (integrate.odeint,)
 
     def __init__(self):
+        """Create an instance of this system, ready to simulate"""
         super(ODEModel, self).__init__()
-        if not hasattr(self.__class__, 'y0'):
-            self.y0 = np.zeros(self.__class__.dimension)
+        if not hasattr(self, 'dimension'):
+            raise Exception('class %s should define a `dimension` attribute ' %
+                            self.__class__.__name__)
+        if not hasattr(self, 'input_vars'):
+            self.input_vars = range(self.dimension)
+        if not hasattr(self, 'output_vars'):
+            self.output_vars = range(self.dimension)
+        if not hasattr(self, 'y0'):
+            self.output_vars = np.zeros(self.dimension)
 
     def integrate(self, tspan):
-        return Timeseries(self.integrator[0](self.f, self.y0, tspan), tspan)
+        ar = self.integrator[0](self.f, self.y0, tspan)
+        return Timeseries(ar, tspan)
 
-    def f(y, t):
+    def f(self, y, t):
         pass
 
 
@@ -791,69 +801,91 @@ class ItoModel(Model):
 
     Attributes:
       dimension (integer): Dimension of the state space
+      input_vars (list of integers): If i is in this list then y[i] is 
+        considered an input variable
       output_vars (list of integers): If i is in this list then y[i] is 
         considered an output variable
-      f(y, t): deterministic part of Ito SDE system 
-      G(y, t): noise coefficient matrix of Ito SDE system 
+      y0 (array of shape (dimension,)): Initial state
       integrator (sequence containing a single function): Which function to use
         by default to integrate systems of this class.
-
-    Instance attributes:
-      y0 (array of shape (ndim,)): Initial state vector
+    Methods:
+      f(y, t): deterministic part of Ito SDE system 
+      G(y, t): noise coefficient matrix of Ito SDE system 
     """
-    integrator = (sdeint.itoint,)
     dimension = 1
-    output_vars = [0]
+    input_vars = range(dimension)
+    output_vars = range(dimension)
+    y0 = np.zeros(dimension)
+    integrator = (sdeint.itoint,)
 
     def __init__(self):
+        """Create an instance of this system, ready to simulate"""
         super(ItoModel, self).__init__()
-        if not hasattr(self.__class__, 'y0'):
-            self.y0 = np.zeros(self.__class__.dimension)
+        if not hasattr(self, 'dimension'):
+            raise Exception('class %s should define a `dimension` attribute ' %
+                            self.__class__.__name__)
+        if not hasattr(self, 'input_vars'):
+            self.input_vars = range(self.dimension)
+        if not hasattr(self, 'output_vars'):
+            self.output_vars = range(self.dimension)
+        if not hasattr(self, 'y0'):
+            self.output_vars = np.zeros(self.dimension)
 
     def integrate(self, tspan):
         ar = self.integrator[0](self.f, self.G, self.y0, tspan)
         return Timeseries(ar, tspan)
 
-    def f(y, t):
+    def f(self, y, t):
         pass
 
-    def G(y, t):
+    def G(self, y, t):
         pass
 
 
 class StratonovichModel(Model):
-    """Model defined by system of Stratonovich stochastic differential equations
-    dy = f(y, t) dt + G(y, t) \circ dW
+    """Model defined by system of Stratonovich stochastic differential
+    equations   dy = f(y, t) dt + G(y, t) \circ dW
 
     Attributes:
       dimension (integer): Dimension of the state space
+      input_vars (list of integers): If i is in this list then y[i] is 
+        considered an input variable
       output_vars (list of integers): If i is in this list then y[i] is 
         considered an output variable
-      f(y, t): deterministic part of Stratonovich SDE system 
-      G(y, t): noise coefficient matrix of Stratonovich SDE system 
+      y0 (array of shape (dimension,)): Initial state
       integrator (sequence containing a single function): Which function to use
         by default to integrate systems of this class.
-
-    Instance attributes:
-      y0 (array of shape (ndim,)): Initial state vector
+    Methods:
+      f(y, t): deterministic part of Stratonovich SDE system 
+      G(y, t): noise coefficient matrix of Stratonovich SDE system 
     """
-    integrator = (sdeint.stratint,)
     dimension = 1
-    output_vars = [0]
+    input_vars = range(dimension)
+    output_vars = range(dimension)
+    y0 = np.zeros(dimension)
+    integrator = (sdeint.stratint,)
 
     def __init__(self):
+        """Create an instance of this system, ready to simulate"""
         super(StratonovichModel, self).__init__()
-        if not hasattr(self.__class__, 'y0'):
-            self.y0 = np.zeros(self.__class__.dimension)
+        if not hasattr(self, 'dimension'):
+            raise Exception('class %s should define a `dimension` attribute ' %
+                            self.__class__.__name__)
+        if not hasattr(self, 'input_vars'):
+            self.input_vars = range(self.dimension)
+        if not hasattr(self, 'output_vars'):
+            self.output_vars = range(self.dimension)
+        if not hasattr(self, 'y0'):
+            self.output_vars = np.zeros(self.dimension)
 
     def integrate(self, tspan):
         ar = self.integrator[0](self.f, self.G, self.y0, tspan)
         return Timeseries(ar, tspan)
 
-    def f(y, t):
+    def f(self, y, t):
         pass
 
-    def G(y, t):
+    def G(self, y, t):
         pass
 
 
@@ -870,12 +902,12 @@ class DelayItoModel(Model):
 
 
 class Simulation(object):
-    """Represents simulation of a single system and the resulting time series.
+    """Represents a simulation of a single system, the parameter settings that
+    were used and the resulting time series.
 
     Attributes:
-      system (Model): The dynamical system being simulated. (Can provide either
-        a Model subclass or Model instance)
-      tspan (array): The sequence of time points simulated
+      system (Model): The dynamical system that was simulated, with parameters.
+      tspan (array): The sequence of time points that was simulated
       timeseries (array of shape (len(tspan), len(y0))): 
         Multivariate time series of full simulation results.
       output: Some function of the simulated timeseries, for example a 
@@ -884,7 +916,11 @@ class Simulation(object):
     def __init__(self, system, T=60.0, dt=0.005, integrator=None):
         """
         Args:
-          system (Model): The dynamical system to simulate
+          system (Model): The dynamical system to simulate. (Here you can
+            provide either a Model class or a Model instance. If a class is
+            provided then the class will be instantiated to create this
+            simulation, and any random variables in the model's parameters
+            will be instantiated with specific values from the distribution.)
           T (Number, optional): Total length of time to simulate, in seconds.
           dt (Number, optional): Timestep for numerical integration.
           integrator (callable, optional): Which numerical integration
@@ -902,7 +938,6 @@ class Simulation(object):
         self.T = T
         self.dt = dt
         self.__timeseries = None
-        self.__output_vars = tuple(self.system.__class__.output_vars)
 
     def compute(self):
          tspan = np.arange(0, self.T + self.dt, self.dt)
@@ -916,7 +951,7 @@ class Simulation(object):
     timeseries = property(fget=__get_timeseries, doc="Simulated time series")
 
     def __get_output(self):
-        return self.timeseries[:,self.__output_vars]
+        return self.timeseries[:, self.system.output_vars]
 
     output = property(fget=__get_output, doc="Simulated model output")
 
@@ -1237,34 +1272,43 @@ class RepeatedSim(DistSim):
       timeseries: resulting timeseries: all variables of all simulations
       output: resulting timeseries: output variables of all simulations
     """
-    def __init__(self, model, T=60.0, dt=0.005, repeat=1, identical=True,
+    def __init__(self, system, T=60.0, dt=0.005, repeat=1, identical=True,
                  integrator=None):
         """
         Args:
-          model: Can be either a Model subclass or Model instance. This 
-            defines the dynamical systems to simulate.
+          system (Model): The dynamical system to simulate. (Here you can
+            provide either a Model class or a Model instance. If a class is
+            provided then the class will be instantiated repeatedly to create
+            the simulations, and any random variables in the model's parameters
+            will be instantiated with specific values.
+
           T (optional): total length of time to simulate, in seconds.
+
           dt (optional): timestep for numerical integration.
-          repeat (int, optional): number of repeated simulations of the model
-          identical (bool, optional): Whether the repeated simulations use 
-            identical parameters. If identical=False, each simulation will use 
-            different parameters drawn from the random distributions defined in 
-            the Model class. If identical=True, the choice will be made once 
-            and then all simulations done with identical parameters. 
+
+          repeat (int, optional): number of repeated simulations of the model.
+
+          identical (bool, optional): Whether repeated simulations of the model
+            should use the same parameters. If identical=False, for each
+            simulation different values will be drawn randomly from
+            distributions specified in the model (assuming the model has some
+            parameters specified as distributions). If identical=True values
+            will be chosen once then the same values used in each simulation.
+
           integrator (callable, optional): Which numerical integration
             algorithm to use. If None, the model's default algorithm will be
             used. The integrator function should accept the same arguments as
             the sdeint library, e.g. y = integrator(f, y0, tspan) for an ODE or
             y = integrator(f, G, y0, tspan) for a SDE.
         """
-        if isinstance(model, type):
-            self.modelclass = model
-            system = self.modelclass()
+        if isinstance(system, type):
+            self.modelclass = system # class
+            model = self.modelclass() # instance
         else:
-            system = model
-            self.modelclass = type(model)
+            self.modelclass = type(system) # class
+            model = system # instance
         if identical is True:
-            systems = [copy.deepcopy(system) for i in range(repeat)]
+            systems = [copy.deepcopy(model) for i in range(repeat)]
         else:
             systems = [self.modelclass() for i in range(repeat)]
         super(RepeatedSim, self).__init__(systems, T, dt, integrator)
@@ -1274,7 +1318,8 @@ class RepeatedSim(DistSim):
 
 
 class ParameterSim(DistSim):
-    """Independent simulations of a model exploring different parameters"""
+    """Separate simulations of a model to explore a lattice of different
+    parameter values."""
     pass
 
 
