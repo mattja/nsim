@@ -16,6 +16,7 @@ Classes:
 ``StratonovichModel``  system of Stratonovich stochastic differential equations
 ``DDEModel``   system of delay differential equations
 ``DelayItoModel``   system of Ito stochastic delay differential equations
+``NetworkModel``   many coupled instances of a submodel connected in a network
 
 ``Simulation``   single simulation run of a model, with simulation results
 
@@ -901,6 +902,317 @@ class DelayItoModel(Model):
     pass
 
 
+class NetworkModel(Model):
+    """Model consisting of many coupled instances of a sub-model connected in a
+    network.
+
+    Currently it is assumed that all submodels are similar (in that they have
+    the same number of outputs, the same number of inputs and all coupling
+    connections in the network are the same except for connection strength)
+
+    It is also assumed that inputs from multiple sources to the same target
+    submodel should be summed linearly to get the overall effect.
+    For ODE:   dy_i/dt = f_i(y, t)  + \sum_{j=1}^{n}{coupling(y_j, weight_j)}
+
+    For SDE:   dy_i = f_i(y, t)dt + \sum_{j=1}^{n}{coupling(y_j, weight_j)}
+                      + G_i(y, t).dot(dW_i)
+
+    Indexing with [i] gives access to the ith sub-system in the network.
+
+    Attributes:
+      network (array of shape (n, n)): adjacency matrix defining the network.
+
+      timeseries: resulting timeseries: all variables of all nodes.
+
+      output: resulting timeseries: only output variables of output nodes.
+    """
+    def __init__(self, submodels, network, coupling_function=None,
+                 independent_noise=True):
+        """Construct a network model from submodels and a connectivity matrix.
+
+        Arguments:
+          submodels (sequence of Model): n subsystems comprising the nodes of
+            the network. The submodels do not have to be identical. But it is
+            expected that all submodels have the same number of inputs, and all
+            have the same number of outputs.
+
+          network (array of shape (n, n)): Adjacency matrix defining the
+            network edges as a weighted, directed graph. If network[i, j] is
+            nonzero, this means subsystem i provides input to subsystem j with
+            connection strength (weight) given by the value of network[i, j].
+
+          coupling_function (callable): Function `coupling(suboutput, weight)`
+            How the outputs of one subsystem should be coupled to the inputs of
+            another. If `None`, the default is to look for a coupling function
+            defined by the submodels being coupled: submodels[0].coupling()
+
+            If `None` and the submodel also does not define any coupling
+            function, then the fallback is to take the mean of all outputs of
+            the source subsystem and send that value to all inputs of the
+            target subsystem. That is probably not what you want, so supply a
+            function here. When providing a coupling function, it should have
+            the same signature as NetworkModel.coupling()
+
+          independent_noise (optional bool): This option is only used for
+            stochastic systems. If True, the noise processes driving each
+            submodel will be independent (this may be suitable if the noise is
+            modelling processes intrinsic to each submodel). If False, all
+            submodels will share the same noise inputs (suitable in some cases
+            where the noise is extrinsic).
+        """
+        self.submodels = [m() if (isinstance(m, type) and issubclass(m, Model))
+                          else m for m in submodels] # permit classes
+        self.submodels = [self._scalar_to_vector(m) for m in self.submodels]
+        self._n = len(self.submodels)
+        # decide whether to treat overall system as ODE, Ito or Stratonovich
+        submodel_classes = []
+        self.submodel_class = ODEModel # default to ODE, if no SDE submodels
+        self.integrator = (integrate.odeint,)
+        self.coupling_function = (self.coupling,)
+        for m in self.submodels:
+            if isinstance(m, NetworkModel):
+                m = m.submodel_class
+            if isinstance(m, ODEModel):
+                submodel_classes.append(ODEModel)
+            elif isinstance(m, ItoModel):
+                submodel_classes.append(ItoModel)
+                self.submodel_class = ItoModel
+                self.integrator = (sdeint.itoint,)
+            elif isinstance(m, StratonovichModel):
+                submodel_classes.append(StratonovichModel)
+                self.submodel_class = StratonovichModel
+                self.integrator = (sdeint.stratint,)
+            else:
+                raise SimValueError(
+                  """currently only subclasses of ODEModel, ItoModel, 
+                  StratonovichModel or NetworkModel are supported as 
+                  subsystems of a NetworkModel""")
+        if (ItoModel in submodel_classes and 
+                StratonovichModel in submodel_classes):
+            raise SimValueError(
+              "can't use Ito and Stratonovich submodels in the same network")
+        self.subninputs = len(self.submodels[0].input_vars)
+        self.subnoutputs = len(self.submodels[0].output_vars)
+        self.dimension = 0
+        self._si = [0] # starting indices for each submodel, and one beyond end
+        for m in self.submodels:
+            self.dimension += m.dimension
+            self._si.append(self.dimension)
+            if len(m.input_vars) != self.subninputs:
+                raise SimValueError(
+                  'submodels must all have same number of input variables')
+            if len(m.output_vars) != self.subnoutputs:
+                raise SimValueError(
+                  'submodels must all have same number of output variables')
+        network = np.array(network)
+        if network.shape != (self._n, self._n):
+            raise SimValueError(
+              'for %d submodels, adjacency matrix should be shape (%d,%d)' % (
+              self._n, self._n, self._n))
+        self.network = network
+        test_y0 = self.submodels[0].y0
+        if coupling_function is not None:
+            self.coupling_function = (coupling_function,)
+        elif (isinstance(self.submodels[0], Model) and
+              hasattr(self.submodels[0], 'coupling') and
+              callable(self.submodels[0].coupling)):
+            self.coupling_function = (self.submodels[0].coupling,)
+        else:
+            warnings.warn('No coupling function defined. Using the default.',
+                          RuntimeWarning, 1)
+        try:
+            test_res = self.coupling_function[0](test_y0, 0.5)
+        except:
+            print("""Each submodel produces %d outputs, so the coupling
+                  function should accept an array of shape (%d,) and a
+                  weight as arguments""" % ((self.subnoutputs,) * 2))
+            raise
+        if not test_res.shape == (self.subninputs,):
+            raise SimValueError(
+                """Each submodel expects %d inputs, so the coupling
+                function must return an array of shape (%d,).""" % (
+                self.subninputs, self.subninputs))
+        # For the kth submodel, _ytoo[k] is a projection matrix mapping from
+        # the submodel's state space to its space of output variables.
+        # _itoy[k] is a matrix mapping from the submodel's space of input
+        # variables to the submodel's state space.
+        self._ytoo = []
+        self._itoy = []
+        for m in self.submodels:
+            self._ytoo.append(
+                    np.identity(m.dimension)[np.array(m.output_vars)])
+            self._itoy.append(
+                    np.identity(m.dimension)[np.array(m.input_vars)].T)
+        self.input_nodes = range(self._n)
+        self.output_nodes = range(self._n)
+        self.y0 = np.concatenate([m.y0 for m in self.submodels], axis=0)
+        self._independent_noise = independent_noise
+        self._nsubnoises = []
+        for m in self.submodels:
+            self._nsubnoises.append(self._number_of_driving_noises(m))
+        # determine number of driving Wiener processes for overall network
+        if self._independent_noise:
+            self.nnoises = sum(p for p in self._nsubnoises)
+        else:
+            self.nnoises = max(p for p in self._nsubnoises)
+
+    def coupling(self, suboutput, weight):
+        """How to couple the output of one subsystem to the input of another.
+
+        This is a fallback default coupling function that should usually be
+        replaced with your own.
+
+        This example coupling function takes the mean of all outputs of the
+        source subsystem and sends that uniformly to all inputs of the target
+        subsystem.
+
+        Arguments:
+          suboutput (array of shape (nout,)): The output of a source subsystem.
+            Here nout is the number of output variables of each submodel.
+          weight (float): the connection strength for this connection.
+
+        Returns:
+          subinput (array of shape (nin,)): Values to drive the input variables
+            of the target system. Here nin is the number of inputs expected by
+            each submodel.
+        """
+        return weight*np.ones(self.subninputs)*np.mean(suboutput)
+
+    def f(self, y, t):
+        """Deterministic term f of the complete network system
+        dy = f(y, t)dt + G(y, t).dot(dW)
+
+        (or for an ODE network system without noise, dy/dt = f(y, t))
+
+        Args:
+          y (array of shape (d,)): where d is the dimension of the overall
+            state space of the complete network system. 
+
+        Returns: 
+          f (array of shape (d,)):  Defines the deterministic term of the
+            complete network system
+        """
+        coupling = self.coupling_function[0]
+        res = np.empty_like(self.y0)
+        for j, m in enumerate(self.submodels):
+            slicej = slice(self._si[j], self._si[j+1])
+            res[slicej] = m.f(y[slicej], t) # deterministic part of submodel j
+            itoy = self._itoy[j]
+            # get indices of all source nodes that provide input to node j:
+            sources = np.nonzero(self.network[:,j])[0]
+            for i in sources:
+                weight = self.network[i, j]
+                ytoo = self._ytoo[i]
+                suby = y[slice(self._si[i], self._si[i+1])] # source node state
+                suboutput = np.dot(ytoo, suby) # source node output
+                res[slicej] += np.dot(itoy, coupling(suboutput, weight))
+        return res
+
+    def G(self, y, t):
+        """Noise coefficient matrix G of the complete network system
+        dy = f(y, t)dt + G(y, t).dot(dW)
+
+        (for an ODE network system without noise this function is not used)
+
+        Args:
+          y (array of shape (d,)): where d is the dimension of the overall
+            state space of the complete network system. 
+
+        Returns:
+          G (array of shape (d, m)): where m is the number of independent
+            Wiener processes driving the complete network system. The noise
+            coefficient matrix G defines the stochastic term of the system.
+        """
+        if self._independent_noise:
+            # then G matrix consists of submodel Gs diagonally concatenated:
+            res = np.zeros((self.dimension, self.nnoises))
+            offset = 0
+            for j, m in enumerate(self.submodels):
+                slicej = slice(self._si[j], self._si[j+1])
+                ix = (slicej, slice(offset, offset + self._nsubnoises[j]))
+                res[ix] = m.G(y[slicej], t) # submodel noise coefficient matrix
+                offset += self._nsubnoises[j]
+        else:
+            # identical driving: G consists of submodel Gs stacked vertically
+            res = np.empty((self.dimension, self.nnoises))
+            for j, m in enumerate(self.submodels):
+                slicej = slice(self._si[j], self._si[j+1])
+                ix = (slicej, slice(None))
+                res[ix] = m.G(y[slicej], t) # submodel noise coefficient matrix
+        return res
+
+    def integrate(self, tspan):
+        if self.submodel_class is ODEModel:
+            ar = self.integrator[0](self.f, self.y0, tspan)
+        elif (self.submodel_class is ItoModel or
+              self.submodel_class is StratonovichModel):
+            ar = self.integrator[0](self.f, self.G, self.y0, tspan)
+        return Timeseries(ar, tspan)
+
+    def _number_of_driving_noises(self, submodel):
+        if isinstance(submodel, ODEModel):
+            return 0
+        else:
+            t0 = 0.0
+            return submodel.G(submodel.y0, t0).shape[1]
+
+    def _set_input_nodes(self, seq):
+        self.__input_nodes = list(seq)
+        # _ytoi[k] is a matrix for submodel k mapping from its full state space
+        # to # its space of input variables.
+        self.input_vars = []
+        for k in self.__input_nodes:
+            self.input_vars.extend((v + k*self.subninputs) for
+                                   v in self.submodels[k].input_vars)
+
+    def _set_output_nodes(self, seq):
+        self.__output_nodes = list(seq)
+        # _otoy[k] is matrix for submodel k mapping from its space of output
+        # variables to its full state space.
+        self.output_vars = []
+        for k in self.__output_nodes:
+            self.output_vars.extend((v + k*self.subnoutputs) for
+                                    v in self.submodels[k].output_vars)
+
+    input_nodes = property(fget=(lambda self: self.__input_nodes),
+                           fset=_set_input_nodes)
+
+    output_nodes = property(fget=(lambda self: self.__output_nodes),
+                            fset=_set_output_nodes)
+
+    def _scalar_to_vector(self, m):
+        """Allow submodels with scalar equations. Convert to 1D vector systems.
+        Args:
+          m (Model)
+        """
+        if not isinstance(m.y0, numbers.Number):
+            return m
+        else:
+            m = copy.deepcopy(m)
+            t0 = 0.0
+            if isinstance(m.y0, numbers.Integral):
+                numtype = np.float64
+            else:
+                numtype = type(m.y0)
+            y0_orig = m.y0
+            m.y0 = np.array([m.y0], dtype=numtype)
+            def make_vector_fn(fn):
+                def newfn(y, t):
+                    return np.array([fn(y[0], t)], dtype=numtype)
+                newfn.__name__ = fn.__name__
+                return newfn
+            def make_matrix_fn(fn):
+                def newfn(y, t):
+                    return np.array([[fn(y[0], t)]], dtype=numtype)
+                newfn.__name__ = fn.__name__
+                return newfn
+            if isinstance(m.f(y0_orig, t0), numbers.Number):
+                m.f = make_vector_fn(m.f)
+            if hasattr(m, 'G') and isinstance(m.G(y0_orig,t0), numbers.Number):
+                m.G = make_matrix_fn(m.G)
+            return m
+
+
 class Simulation(object):
     """Represents a simulation of a single system, the parameter settings that
     were used and the resulting time series.
@@ -1324,8 +1636,31 @@ class ParameterSim(DistSim):
 
 
 class NetworkSim(Simulation):
-    """Simulation of many coupled instances of a model connected in a network"""
-    pass
+    """Simulation of many coupled instances of a model connected in a network
+
+    Like a list, indexing with [i] gives access to ith system in the network.
+
+    Attributes:
+      network: the adjacency matrix defining the network's directed graph
+      timeseries: resulting timeseries: all variables of all nodes
+      output: resulting timeseries: output variables of all nodes
+    """
+
+    def __init__(self, systems, network, T=60.0, dt=0.005, integrator=None):
+        """
+        Args:
+          systems: sequence of Model instances that should be simulated.
+          T: total length of time to simulate, in seconds.
+          dt: timestep for numerical integration.
+          integrator (callable, optional): Which numerical integration
+            algorithm to use. If None, the model's default algorithm will be
+            used. The integrator function should accept the same arguments as
+            the sdeint library, e.g. y = integrator(f, y0, tspan) for an ODE or
+            y = integrator(f, G, y0, tspan) for a SDE.
+        """
+        self.T = T
+        self.dt = dt
+        self.sims = [Simulation(s, T, dt, integrator) for s in systems]
 
 
 def newsim(f, G, y0, name='NewModel', modelType=ItoModel, T=60.0, dt=0.005, repeat=1, identical=True):

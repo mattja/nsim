@@ -6,9 +6,10 @@ from . import analyses1
 Timeseries.add_analyses(analyses1)
 
 from .nsim import (
-        Model, ODEModel, ItoModel, StratonovichModel, DelayItoModel,
-        Simulation, MultipleSim, RepeatedSim, ParameterSim, NetworkSim,
-        newmodel, newsim, DistTimeseries, Error, SimTypeError, SimValueError)
+        Model, ODEModel, ItoModel, StratonovichModel, NetworkModel,
+        DelayItoModel, Simulation, MultipleSim, RepeatedSim, ParameterSim,
+        NetworkSim, newmodel, newsim, DistTimeseries, Error, SimTypeError,
+        SimValueError)
 
 from . import analysesN
 DistTimeseries.add_analyses(analyses1, vectorize=True)
