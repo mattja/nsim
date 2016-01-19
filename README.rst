@@ -3,22 +3,21 @@ nsim
 | Simulate systems from ODEs or SDEs, analyze timeseries.
 |  N.B. this is a pre-release: still a lot left to be done
 
-Overview
---------
-nsim is for systems in physics, biology and finance that are modelled in
-continuous time with differential equations. nsim makes it easy to
-define and simulate these (including proper treatment of noise in SDEs)
-and to analyze the properties of the resulting time series.
+Simulation
+----------
+nsim is for systems in physics, biology and finance that are modelled in continuous time with differential equations. nsim makes it easy to define and simulate these (including proper treatment of noise) and to analyze the resulting time series.
 
 -  | Automatic parallel computing / cluster computing: For multiple or repeated simulations, nsim distributes these across a cluster or Amazon EC2 cloud (or across the CPUs of one computer) without needing to do any parallel programming.
    | (First configure an `IPython cluster <https://ipyparallel.readthedocs.org/en/latest/process.html#configuring-an-ipython-cluster>`_. e.g. on a single computer can type ``ipcluster start``)
 
-- Now supports ODEs, scalar and vector Ito and Stratonovich SDEs (possibly with multiple driving noise processes) and can use a more recent order 1.0 strong stochastic Runge-Kutta algorithm (Rößler2010) for simulating the SDEs.
+-  To define a scalar or vector ODE system, subclass ``ODEModel``. (see `examples <https://github.com/mattja/nsim/tree/master/examples>`_) To define a scalar or vector SDE system, subclass ``ItoModel`` or ``StratonovichModel``. Multiple driving Wiener processes are now supported. Order 1.0 strong stochastic Runge-Kutta algorithms (Rößler2010) are used for SDE integration by default.
 
--  Model parameters can optionally be specified as random distributions,
-   instead of fixed values, to create multiple non-identical
-   simulations.
+-  Model parameters can be specified as random distributions, to create multiple non-identical simulations.
 
+-  The ``NetworkModel`` class allows you to simulate many subsystems coupled together into a network, with the network structure specified as a weighted directed graph. Sub-models can all be identical but they don't have to be. (The `networkx <http://networkx.github.io/>`_ package can optionally be used to generate various kinds of random, clustered and small world graphs useful in a NetworkModel). The sub-models in a NetworkModel can even be other NetworkModels, for simulating networks of networks.
+
+Analyzing time series
+---------------------
 Besides time series from simulations, empirical time series data can also be loaded from MATLAB .mat files or .EDF files for distributed analysis.
 
 -  | nsim provides a ``Timeseries`` class. This is a numpy array.
@@ -35,15 +34,15 @@ TODO
 -  Auto-generate multiple simulations covering a lattice of points in
    parameter space, to run in parallel.
 
--  Support network models of dynamical nodes, auto-generated from models
-   of node dynamics and a network graph structure. (use shared memory
-   and multiple CPU cores on each cluster host for simulation of network
-   models, splitting degrees of freedom evenly across CPUs).
-
 -  Optionally allow the equations to be specified and integrated in C,
    for speed
 
 -  Add support for models with time delays (DDEs and delay SDEs)
+
+-  Currently a single CPU core is used to simulate each single instance of a
+   Model, including a NetworkModel. Ideally could use shared memory and
+   multiple CPU cores on each cluster host for simulation of a Model instance,
+   splitting degrees of freedom evenly across CPUs on a single host.
 
 Thanks
 ------
