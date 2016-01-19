@@ -35,9 +35,11 @@ class JansenRit(StratonovichModel):
     """
     dimension = 8 # the number of state variables
 
+    labels = ['v0', 'v1', 'v2', 'v3', 'v4', 'v5', 'v6', 'v7']
     # List of integers to indicate which variables are output of the model. For
     # this model, v[1]-v[2] is usually the output (average pyramidal potential)
     output_vars = [1, 2]
+    input_vars = [5]
 
     # standard parameters for Jansen and Rit 1995
     rho1 = 0.56 # mV^-1
@@ -67,8 +69,9 @@ class JansenRit(StratonovichModel):
     p_sdev = p_sdev*np.sqrt(average_timestep_used_by_jr) 
     # i.e. reduce noise by a factor of about 29
 
-    # initial conditions
-    y0 = np.array([0., 0., 0., 0., 0., 0., 0., 0.])
+    # default initial conditions: near stable equilibrium
+    y0 = np.array([12.214, 23.925, 16.841, 3.0534, 13.564, -11.803, -109.62,
+                    3.3909])
 
     # N.B. scaling factor 2*e0 from Jansen1995 is moved to the definition of g1
     def S(self, y):
@@ -120,3 +123,15 @@ class JansenRit(StratonovichModel):
         ret[4,0] = self.ke1 * self.He1 * self.u_sdev
         ret[5,0] = self.ke2 * self.He2 * self.p_sdev
         return ret
+
+    def coupling(self, output, weight):
+        """How to couple the output of one node to the input of another.
+        Args:
+          output (array of shape (2,)): the output variables of the source node
+          weight (float): the connection strength
+        Returns:
+          input (array of shape (1,)): value to drive the input variable of the
+            target node.
+        """
+        v_pyramidal = output[0] - output[1] # that is, v[1] - v[2]
+        return np.array([self.He2*self.ke2*weight*self.g1*self.S(v_pyramidal)])
