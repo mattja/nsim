@@ -964,6 +964,24 @@ class NetworkModel(Model):
                           else m for m in submodels] # permit classes
         self.submodels = [self._scalar_to_vector(m) for m in self.submodels]
         self._n = len(self.submodels)
+        self.dimension = 0
+        self._sublengths = [] # dimension of the state space of each submodel
+        self._si = [0] # starting indices for each submodel, and one beyond end
+        self.subninputs = len(self.submodels[0].input_vars)
+        self.subnoutputs = len(self.submodels[0].output_vars)
+        for m in self.submodels:
+            self.dimension += m.dimension
+            self._sublengths.append(m.dimension)
+            self._si.append(self.dimension)
+            if len(m.input_vars) != self.subninputs:
+                raise SimValueError(
+                  'submodels must all have same number of input variables')
+            if len(m.output_vars) != self.subnoutputs:
+                raise SimValueError(
+                  'submodels must all have same number of output variables')
+        self.input_nodes = range(self._n)
+        self.output_nodes = range(self._n)
+        super(NetworkModel, self).__init__()
         # decide whether to treat overall system as ODE, Ito or Stratonovich
         submodel_classes = []
         self.submodel_class = ODEModel # default to ODE, if no SDE submodels
@@ -991,19 +1009,6 @@ class NetworkModel(Model):
                 StratonovichModel in submodel_classes):
             raise SimValueError(
               "can't use Ito and Stratonovich submodels in the same network")
-        self.subninputs = len(self.submodels[0].input_vars)
-        self.subnoutputs = len(self.submodels[0].output_vars)
-        self.dimension = 0
-        self._si = [0] # starting indices for each submodel, and one beyond end
-        for m in self.submodels:
-            self.dimension += m.dimension
-            self._si.append(self.dimension)
-            if len(m.input_vars) != self.subninputs:
-                raise SimValueError(
-                  'submodels must all have same number of input variables')
-            if len(m.output_vars) != self.subnoutputs:
-                raise SimValueError(
-                  'submodels must all have same number of output variables')
         network = np.array(network)
         if network.shape != (self._n, self._n):
             raise SimValueError(
@@ -1043,8 +1048,6 @@ class NetworkModel(Model):
                     np.identity(m.dimension)[np.array(m.output_vars)])
             self._itoy.append(
                     np.identity(m.dimension)[np.array(m.input_vars)].T)
-        self.input_nodes = range(self._n)
-        self.output_nodes = range(self._n)
         self.y0 = np.concatenate([m.y0 for m in self.submodels], axis=0)
         self._independent_noise = independent_noise
         self._nsubnoises = []
@@ -1156,29 +1159,29 @@ class NetworkModel(Model):
             t0 = 0.0
             return submodel.G(submodel.y0, t0).shape[1]
 
-    def _set_input_nodes(self, seq):
-        self.__input_nodes = list(seq)
-        # _ytoi[k] is a matrix for submodel k mapping from its full state space
-        # to # its space of input variables.
+    @property
+    def input_nodes(self):
+        return self._input_nodes
+
+    @input_nodes.setter
+    def input_nodes(self, seq):
+        self._input_nodes = list(seq)
         self.input_vars = []
-        for k in self.__input_nodes:
-            self.input_vars.extend((v + k*self.subninputs) for
+        for k in self._input_nodes:
+            self.input_vars.extend((v + self._si[k]) for
                                    v in self.submodels[k].input_vars)
 
-    def _set_output_nodes(self, seq):
-        self.__output_nodes = list(seq)
-        # _otoy[k] is matrix for submodel k mapping from its space of output
-        # variables to its full state space.
+    @property
+    def output_nodes(self):
+        return self._output_nodes
+
+    @output_nodes.setter
+    def output_nodes(self, seq):
+        self._output_nodes = list(seq)
         self.output_vars = []
-        for k in self.__output_nodes:
-            self.output_vars.extend((v + k*self.subnoutputs) for
+        for k in self._output_nodes:
+            self.output_vars.extend((v + self._si[k]) for
                                     v in self.submodels[k].output_vars)
-
-    input_nodes = property(fget=(lambda self: self.__input_nodes),
-                           fset=_set_input_nodes)
-
-    output_nodes = property(fget=(lambda self: self.__output_nodes),
-                            fset=_set_output_nodes)
 
     def _scalar_to_vector(self, m):
         """Allow submodels with scalar equations. Convert to 1D vector systems.
@@ -1249,23 +1252,28 @@ class Simulation(object):
             self.system.integrator = [integrator]
         self.T = T
         self.dt = dt
-        self.__timeseries = None
+        self._timeseries = None
 
     def compute(self):
          tspan = np.arange(0, self.T + self.dt, self.dt)
-         self.__timeseries = Timeseries(self.system.integrate(tspan), tspan)
+         if hasattr(self.system, 'labels'):
+             labels = [None, self.system.labels]
+         else:
+             labels = [None, None]
+         ar = self.system.integrate(tspan)
+         self._timeseries = Timeseries(ar, tspan, labels)
 
-    def __get_timeseries(self):
-         if self.__timeseries is None:
-             self.compute()
-         return self.__timeseries
+    @property
+    def timeseries(self):
+        """Simulated time series"""
+        if self._timeseries is None:
+            self.compute()
+        return self._timeseries
 
-    timeseries = property(fget=__get_timeseries, doc="Simulated time series")
-
-    def __get_output(self):
+    @property
+    def output(self):
+        """Simulated model output"""
         return self.timeseries[:, self.system.output_vars]
-
-    output = property(fget=__get_output, doc="Simulated model output")
 
 
 class MultipleSim(object):
@@ -1318,7 +1326,11 @@ class MultipleSim(object):
     def _node_labels(self):
         return ['node %d' % i for i in range(len(self.sims))]
    
-    def __get_timeseries(self):
+    @property
+    def timeseries(self):
+        """Rank 3 array representing multiple time series. Axis 0 is time,
+        axis 1 ranges across all dynamical variables in a single simulation,
+        axis 2 ranges across different simulation instances."""
         subts = [s.timeseries for s in self.sims]
         sub_ndim = subts[0].ndim
         if sub_ndim is 1:
@@ -1330,12 +1342,11 @@ class MultipleSim(object):
         ts.labels[nodeaxis] = self._node_labels()
         return ts
 
-    timeseries = property(fget=__get_timeseries, doc="Rank 3 array representing"
-        " multiple time series. Axis 0 is time, axis 1 ranges across all"
-        " dynamical variables in a single simulation, axis 2 ranges across"
-        " different simulation instances.")
-
-    def __get_output(self):
+    @property
+    def output(self):
+        """Rank 3 array representing output time series. Axis 0 is time, 
+        axis 1 ranges across output variables of a single simulation, 
+        axis 2 ranges across different simulation instances."""
         subts = [s.output for s in self.sims]
         sub_ndim = subts[0].ndim
         if sub_ndim is 1:
@@ -1346,11 +1357,6 @@ class MultipleSim(object):
         ts = subts[0].concatenate(subts[1:], axis=nodeaxis)
         ts.labels[nodeaxis] = self._node_labels()
         return ts
-
-    output = property(fget=__get_output, doc="Rank 3 array representing"
-        " output time series. Axis 0 is time, axis 1 ranges across"
-        " output variables of a single simulation, axis 2 ranges across"
-        " different simulation instances.")
 
 
 @distob.proxy_methods(Simulation)
@@ -1553,25 +1559,23 @@ class DistSim(object):
     def _node_labels(self):
         return ['node %d' % i for i in range(self._n)]
 
-    def __get_timeseries(self):
+    @property
+    def timeseries(self):
+        """Rank 3 array representing multiple time series. Axis 0 is time, 
+        axis 1 ranges across all dynamical variables in a single simulation, 
+        axis 2 ranges across different simulation instances."""
         subts = [rms.timeseries for rms in self._subsims]
         distaxis = subts[0].ndim - 1
         return DistTimeseries(subts, distaxis, self._node_labels())
 
-    timeseries = property(fget=__get_timeseries, doc="Rank 3 array representing"
-        " multiple time series. Axis 0 is time, axis 1 ranges across all"
-        " dynamical variables in a single simulation, axis 2 ranges across"
-        " different simulation instances.")
-
-    def __get_output(self):
+    @property
+    def output(self):
+        """Rank 3 array representing output time series. Axis 0 is time, 
+        axis 1 ranges across output variables of a single simulation, axis 2 
+        ranges across different simulation instances."""
         subts = [rms.output for rms in self._subsims]
         distaxis = subts[0].ndim - 1
         return DistTimeseries(subts, distaxis, self._node_labels())
-
-    output = property(fget=__get_output, doc="Rank 3 array representing"
-        " output time series. Axis 0 is time, axis 1 ranges across"
-        " output variables of a single simulation, axis 2 ranges across"
-        " different simulation instances.")
 
 
 class RepeatedSim(DistSim):
