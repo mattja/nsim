@@ -1651,15 +1651,15 @@ class NetworkSim(Simulation):
     Like a list, indexing with [i] gives access to ith system in the network.
 
     Attributes:
-      network: the adjacency matrix defining the network's directed graph
+      system: the NetworkModel that was simulated, with parameters.
       timeseries: resulting timeseries: all variables of all nodes
       output: resulting timeseries: output variables of all nodes
     """
 
-    def __init__(self, systems, network, T=60.0, dt=0.005, integrator=None):
+    def __init__(self, system, T=60.0, dt=0.005, integrator=None):
         """
         Args:
-          systems: sequence of Model instances that should be simulated.
+          system (NetworkModel): provide the NetworkModel to simulate
           T: total length of time to simulate, in seconds.
           dt: timestep for numerical integration.
           integrator (callable, optional): Which numerical integration
@@ -1668,9 +1668,59 @@ class NetworkSim(Simulation):
             the sdeint library, e.g. y = integrator(f, y0, tspan) for an ODE or
             y = integrator(f, G, y0, tspan) for a SDE.
         """
-        self.T = T
-        self.dt = dt
-        self.sims = [Simulation(s, T, dt, integrator) for s in systems]
+        if (not isinstance(system, NetworkModel) and
+                not hasattr(system, 'submodels')):
+            raise SimValueError('system is not a NetworkModel instance')
+        super(NetworkSim, self).__init__(system, T, dt, integrator)
+
+    def _node_labels(self):
+        return [u'node %d' % i for i in range(self.system._n)]
+
+    @property
+    def timeseries(self):
+        """Simulated time series"""
+        ts = super(NetworkSim, self).timeseries
+        if np.count_nonzero(np.diff(self.system._sublengths)) == 0:
+            # then all submodels have the same dimension, so can reshape array
+            # in place without copying data:
+            subdim = self.system.dimension / self.system._n
+            shp = list(ts.shape)
+            shp[1] = self.system._n
+            shp.insert(2, subdim)
+            ts = ts.reshape(tuple(shp)).swapaxes(1, 2)
+            # label variables only if all sub-models agree on the labels:
+            all_var_labels = [m.labels for m in self.system.submodels]
+            var_labels = all_var_labels[0]
+            if all(v == var_labels for v in all_var_labels[1:]):
+                ts.labels[1] = var_labels
+            ts.labels[2] = self._node_labels()
+            return ts
+        else:
+            # will pad with zeros for submodels with less variables
+            subdim = max(self.system._sublengths)
+            shp = list(ts.shape)
+            shp[1] = subdim
+            shp.insert(2, self.system._n)
+            ar = np.zeros(shp)
+            labels = ts.labels
+            labels.insert(2, self._node_labels())
+            for k in range(self.system._n):
+                sl = slice(self.system._si[k], self.system._si[k+1])
+                ar[:,:,k,...] = ts[:,sl,...]
+            return Timeseries(ar, ts.tspan, labels)
+
+    @property
+    def output(self):
+        """Simulated time series"""
+        # currently submodels all have the same number of output variables
+        ts = super(NetworkSim, self).output
+        subodim = len(self.system.submodel[0].output_vars)
+        shp = list(ts.shape)
+        shp[1] = subodim
+        shp.insert(2, self.system._n)
+        ts = ts.reshape(tuple(shp))
+        ts.labels[2] = self._node_labels()
+        return ts
 
 
 def newsim(f, G, y0, name='NewModel', modelType=ItoModel, T=60.0, dt=0.005, repeat=1, identical=True):
