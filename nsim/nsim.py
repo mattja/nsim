@@ -14,12 +14,9 @@ Classes:
 ``ODEModel``   system of ordinary differential equations
 ``ItoModel``   system of Ito stochastic differential equations
 ``StratonovichModel``  system of Stratonovich stochastic differential equations
-``DDEModel``   system of delay differential equations
-``DelayItoModel``   system of Ito stochastic delay differential equations
 ``NetworkModel``   many coupled instances of a submodel connected in a network
 
 ``Simulation``   single simulation run of a model, with simulation results
-
 ``RepeatedSim``   repeated simulations of the same model (to get statistics)
 ``ParameterSim``  multiple simulations of a model exploring parameter space
 ``NetworkSim``    simulate many instances of a model coupled in a network
@@ -734,6 +731,7 @@ def _dts_from_da(da, tspan, labels):
 
 class Model(object):
     """Base class for different kinds of dynamical systems
+
     Attributes:
       integrator (sequence containing a single function): Which function to use
         by default to integrate systems of this class.
@@ -741,52 +739,105 @@ class Model(object):
     integrator = (None,)
 
     def __init__(self):
-        """When making each new instance from the Model, the constructor will 
-        convert any random-variable class attributes into fixed numbers drawn 
-        from the specified distribution. Thus each individual object made from 
-        the class 'recipe' can be given slightly different parameter values.
+        """When making each new instance from the Model class, we will convert
+        any random-variable class attribute into a fixed number drawn from the
+        specified distribution. Thus each individual object made from the 
+        class 'recipe' will receive slightly different parameter values.
         """
         for attrib in dir(self):
-            if isinstance(getattr(self, attrib), stats.distributions.rv_frozen):
-                setattr(self, attrib, getattr(self, attrib).rvs())
+            if isinstance(getattr(self,attrib), stats.distributions.rv_frozen):
+                setattr(self, attrib, getattr(self,attrib).rvs())
 
     def integrate(self, tspan):
         pass 
 
 
-class ODEModel(Model):
-    """Model defined by a system of ordinary differential equations
+class _DEModel(Model):
+    """Base class with some common code shared by the finite dimensional DE
+    systems ODEModel, ItoModel and StratonovichModel
 
     Attributes:
       dimension (integer): Dimension of the state space
-      input_vars (list of integers): If i is in this list then y[i] is 
-        considered an input variable
-      output_vars (list of integers): If i is in this list then y[i] is 
-        considered an output variable
-      y0 (array of shape (dimension,)): Initial state
-      integrator (sequence containing a single function): Which function to use
-        by default to integrate systems of this class
-    Methods:
-      f(y, t): right hand side of the ODE system dy/dt = f(y, t)
+
+    input_vars (list of integers): If i is in this list then y[i] is 
+      considered an input variable
+
+    output_vars (list of integers): If i is in this list then y[i] is 
+      considered an output variable
+
+    y0 (array of shape (dimension,)): Initial state
+
+    labels (sequence of str): optional names for the dynamical variables
+
+    integrator (sequence containing a single function): Which function to use
+      by default to integrate systems of this class
     """
     dimension = 1
     input_vars = range(dimension)
     output_vars = range(dimension)
     y0 = np.zeros(dimension)
-    integrator = (integrate.odeint,)
+    labels = None
+    integrator = (None,)
 
     def __init__(self):
-        """Create an instance of this system, ready to simulate"""
-        super(ODEModel, self).__init__()
+        super(_DEModel, self).__init__()
         if not hasattr(self, 'dimension'):
             raise Exception('class %s should define a `dimension` attribute ' %
                             self.__class__.__name__)
+        # by default consider all variables to be inputs and outputs
         if not hasattr(self, 'input_vars'):
             self.input_vars = range(self.dimension)
         if not hasattr(self, 'output_vars'):
             self.output_vars = range(self.dimension)
         if not hasattr(self, 'y0'):
             self.output_vars = np.zeros(self.dimension)
+        y0_length = (1 if isinstance(self.y0, numbers.Number) else
+                     np.asarray(self.y0).shape[0])
+        if y0_length != self.dimension:
+            raise Exception(
+              """For a system of dimension %d, initial state y0 should have 
+              length %d.""" % (self.dimension, self.dimension))
+        if (self.labels is not None and
+                len(self.labels) != self.dimension):
+            raise Excpetion(
+              """System has dimension %d. If labels are provided to name the 
+              dynamical variables, there should be %d labels but got %d.""" % (
+              self.dimension, self.dimension, len(self.labels)))
+
+
+class ODEModel(_DEModel):
+    """Model defined by a system of ordinary differential equations
+    dy/dt = f(y, t)
+
+    Attributes:
+      dimension (integer): Dimension of the state space
+
+      input_vars (list of integers): If i is in this list then y[i] is 
+        considered an input variable
+
+      output_vars (list of integers): If i is in this list then y[i] is 
+        considered an output variable
+
+      y0 (array of shape (dimension,)): Initial state
+
+      labels (sequence of str): optional names for the dynamical variables
+
+      integrator (sequence containing a single function): Which function to use
+        by default to integrate systems of this class
+
+    Methods:
+      f(y, t): right hand side of the ODE system
+    """
+    dimension = 1
+    input_vars = range(dimension)
+    output_vars = range(dimension)
+    y0 = np.zeros(dimension)
+    labels = None
+    integrator = (integrate.odeint,)
+
+    def __init__(self):
+        """Create an instance of this system, ready to simulate"""
+        super(ODEModel, self).__init__()
 
     def integrate(self, tspan):
         ar = self.integrator[0](self.f, self.y0, tspan)
@@ -796,19 +847,26 @@ class ODEModel(Model):
         pass
 
 
-class ItoModel(Model):
+class ItoModel(_DEModel):
     """Model defined by system of Ito stochastic differential equations
     dy = f(y, t) dt + G(y, t) dW
 
     Attributes:
       dimension (integer): Dimension of the state space
+
       input_vars (list of integers): If i is in this list then y[i] is 
         considered an input variable
+
       output_vars (list of integers): If i is in this list then y[i] is 
         considered an output variable
+
       y0 (array of shape (dimension,)): Initial state
+
+      labels (sequence of str): optional names for the dynamical variables
+
       integrator (sequence containing a single function): Which function to use
         by default to integrate systems of this class.
+
     Methods:
       f(y, t): deterministic part of Ito SDE system 
       G(y, t): noise coefficient matrix of Ito SDE system 
@@ -817,20 +875,12 @@ class ItoModel(Model):
     input_vars = range(dimension)
     output_vars = range(dimension)
     y0 = np.zeros(dimension)
+    labels = None
     integrator = (sdeint.itoint,)
 
     def __init__(self):
         """Create an instance of this system, ready to simulate"""
         super(ItoModel, self).__init__()
-        if not hasattr(self, 'dimension'):
-            raise Exception('class %s should define a `dimension` attribute ' %
-                            self.__class__.__name__)
-        if not hasattr(self, 'input_vars'):
-            self.input_vars = range(self.dimension)
-        if not hasattr(self, 'output_vars'):
-            self.output_vars = range(self.dimension)
-        if not hasattr(self, 'y0'):
-            self.output_vars = np.zeros(self.dimension)
 
     def integrate(self, tspan):
         ar = self.integrator[0](self.f, self.G, self.y0, tspan)
@@ -843,19 +893,26 @@ class ItoModel(Model):
         pass
 
 
-class StratonovichModel(Model):
+class StratonovichModel(_DEModel):
     """Model defined by system of Stratonovich stochastic differential
     equations   dy = f(y, t) dt + G(y, t) \circ dW
 
     Attributes:
       dimension (integer): Dimension of the state space
+
       input_vars (list of integers): If i is in this list then y[i] is 
         considered an input variable
+
       output_vars (list of integers): If i is in this list then y[i] is 
         considered an output variable
+
       y0 (array of shape (dimension,)): Initial state
+
+      labels (sequence of str): optional names for the dynamical variables
+
       integrator (sequence containing a single function): Which function to use
         by default to integrate systems of this class.
+
     Methods:
       f(y, t): deterministic part of Stratonovich SDE system 
       G(y, t): noise coefficient matrix of Stratonovich SDE system 
@@ -864,20 +921,12 @@ class StratonovichModel(Model):
     input_vars = range(dimension)
     output_vars = range(dimension)
     y0 = np.zeros(dimension)
+    labels = None
     integrator = (sdeint.stratint,)
 
     def __init__(self):
         """Create an instance of this system, ready to simulate"""
         super(StratonovichModel, self).__init__()
-        if not hasattr(self, 'dimension'):
-            raise Exception('class %s should define a `dimension` attribute ' %
-                            self.__class__.__name__)
-        if not hasattr(self, 'input_vars'):
-            self.input_vars = range(self.dimension)
-        if not hasattr(self, 'output_vars'):
-            self.output_vars = range(self.dimension)
-        if not hasattr(self, 'y0'):
-            self.output_vars = np.zeros(self.dimension)
 
     def integrate(self, tspan):
         ar = self.integrator[0](self.f, self.G, self.y0, tspan)
@@ -917,14 +966,16 @@ class NetworkModel(Model):
     For SDE:   dy_i = f_i(y, t)dt + \sum_{j=1}^{n}{coupling(y_j, weight_j)}
                       + G_i(y, t).dot(dW_i)
 
-    Indexing with [i] gives access to the ith sub-system in the network.
+    Indexing with [i] gives access to the ith sub-model in the network.
 
     Attributes:
       network (array of shape (n, n)): adjacency matrix defining the network.
-
       timeseries: resulting timeseries: all variables of all nodes.
-
       output: resulting timeseries: only output variables of output nodes.
+      output_nodes (optional list of int): which nodes of the network should be
+        used to define the output of the overall network (default: all nodes)
+      input_nodes (list of int): which nodes of the network should receive 
+        input from outside this network (default: all nodes)
     """
     def __init__(self, submodels, network, coupling_function=None,
                  independent_noise=True):
@@ -1223,7 +1274,7 @@ class NetworkModel(Model):
 
 
 class Simulation(object):
-    """Represents a simulation of a single system, the parameter settings that
+    """Represents a single simulation of a system, the parameter settings that
     were used and the resulting time series.
 
     Attributes:
