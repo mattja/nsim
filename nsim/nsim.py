@@ -1152,6 +1152,12 @@ class NetworkModel(Model):
             ar = self.integrator[0](self.f, self.G, self.y0, tspan)
         return Timeseries(ar, tspan)
 
+    def __len__(self):
+        return len(self.submodels)
+
+    def __getitem__(self, key):
+        return self.submodels[key]
+
     def _number_of_driving_noises(self, submodel):
         if isinstance(submodel, ODEModel):
             return 0
