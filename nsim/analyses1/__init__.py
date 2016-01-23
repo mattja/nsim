@@ -1,7 +1,8 @@
 from __future__ import absolute_import
 
 from .misc import crossing_indices, first_return_times, autocorrelation
-from .phase import mod2pi, phase_crossings, periods, circmean, circstd
+from .phase import (mod2pi, phase_crossings, periods, circmean, order_param,
+                    circstd)
 from .plots import plot
 from .freq import (psd, lowpass, highpass, bandpass, notch, hilbert, 
                    hilbert_amplitude, hilbert_phase, cwt, cwt_distributed)

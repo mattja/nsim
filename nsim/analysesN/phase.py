@@ -44,8 +44,12 @@ def circmean(dts, axis=2):
     return np.exp(1.0j * dts).mean(axis=axis).angle()
 
 
+def order_param(dts, axis=2):
+    """Order parameter of phase synchronization"""
+    return np.abs(np.exp(1.0j * dts).mean(axis=axis))
+
+
 def circstd(dts, axis=2):
     """Circular standard deviation"""
-    res = np.exp(1.0j * dts).mean(axis=axis)
-    R = np.abs(res)
+    R = np.abs(np.exp(1.0j * dts).mean(axis=axis))
     return np.sqrt(-2.0 * np.log(R))
