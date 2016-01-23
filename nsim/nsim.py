@@ -961,9 +961,9 @@ class NetworkModel(Model):
 
     It is also assumed that inputs from multiple sources to the same target
     submodel should be summed linearly to get the overall effect.
-    For ODE:   dy_i/dt = f_i(y, t)  + \sum_{j=1}^{n}{coupling(y_j, weight_j)}
+    For ODE:   dy_i/dt = f_i(y, t)  + \sum_{j=1}^{n}{coupling_ij(y, weight_j)}
 
-    For SDE:   dy_i = f_i(y, t)dt + \sum_{j=1}^{n}{coupling(y_j, weight_j)}
+    For SDE:   dy_i = f_i(y, t)dt + \sum_{j=1}^{n}{coupling_ij(y, weight_j)}
                       + G_i(y, t).dot(dW_i)
 
     Indexing with [i] gives access to the ith sub-model in the network.
@@ -992,10 +992,10 @@ class NetworkModel(Model):
             nonzero, this means subsystem i provides input to subsystem j with
             connection strength (weight) given by the value of network[i, j].
 
-          coupling_function (callable): Function `coupling(suboutput, weight)`
-            How the outputs of one subsystem should be coupled to the inputs of
-            another. If `None`, the default is to look for a coupling function
-            defined by the submodels being coupled: submodels[0].coupling()
+          coupling_function (callable): Function `coupling(source_o, target_y,
+            weight)` How the outputs of one subsystem should be coupled to the
+            inputs of another. If `None`, the default is to look for a coupling
+            function defined by models being coupled: submodels[0].coupling()
 
             If `None` and the submodel also does not define any coupling
             function, then the fallback is to take the mean of all outputs of
@@ -1066,28 +1066,6 @@ class NetworkModel(Model):
               'for %d submodels, adjacency matrix should be shape (%d,%d)' % (
               self._n, self._n, self._n))
         self.network = network
-        test_y0 = self.submodels[0].y0
-        if coupling_function is not None:
-            self.coupling_function = (coupling_function,)
-        elif (isinstance(self.submodels[0], Model) and
-              hasattr(self.submodels[0], 'coupling') and
-              callable(self.submodels[0].coupling)):
-            self.coupling_function = (self.submodels[0].coupling,)
-        else:
-            warnings.warn('No coupling function defined. Using the default.',
-                          RuntimeWarning, 1)
-        try:
-            test_res = self.coupling_function[0](test_y0, 0.5)
-        except:
-            print("""Each submodel produces %d outputs, so the coupling
-                  function should accept an array of shape (%d,) and a
-                  weight as arguments""" % ((self.subnoutputs,) * 2))
-            raise
-        if not test_res.shape == (self.subninputs,):
-            raise SimValueError(
-                """Each submodel expects %d inputs, so the coupling
-                function must return an array of shape (%d,).""" % (
-                self.subninputs, self.subninputs))
         # For the kth submodel, _ytoo[k] is a projection matrix mapping from
         # the submodel's state space to its space of output variables.
         # _itoy[k] is a matrix mapping from the submodel's space of input
@@ -1099,6 +1077,31 @@ class NetworkModel(Model):
                     np.identity(m.dimension)[np.array(m.output_vars)])
             self._itoy.append(
                     np.identity(m.dimension)[np.array(m.input_vars)].T)
+        # Validate coupling function
+        test_suby0 = self.submodels[0].y0
+        test_subout = np.dot(self._ytoo[0], test_suby0)
+        test_weight = 0.5
+        if coupling_function is not None:
+            self.coupling_function = (coupling_function,)
+        elif (isinstance(self.submodels[0], Model) and
+              hasattr(self.submodels[0], 'coupling') and
+              callable(self.submodels[0].coupling)):
+            self.coupling_function = (self.submodels[0].coupling,)
+        else:
+            warnings.warn('No coupling function defined. Using the default.',
+                          RuntimeWarning, 1)
+        try:
+            test_res = self.coupling_function[0](test_subout, test_suby0,
+                                                 test_weight)
+        except:
+            print('Coupling function failed given arguments %s, %s, %s' % (
+                  test_subout, test_suby0, test_weight))
+            raise
+        if not test_res.shape == (self.subninputs,):
+            raise SimValueError(
+                """Each submodel expects %d inputs, so the coupling
+                function must return an array of shape (%d,).""" % (
+                self.subninputs, self.subninputs))
         self.y0 = np.concatenate([m.y0 for m in self.submodels], axis=0)
         self._independent_noise = independent_noise
         self._nsubnoises = []
@@ -1110,7 +1113,7 @@ class NetworkModel(Model):
         else:
             self.nnoises = max(p for p in self._nsubnoises)
 
-    def coupling(self, suboutput, weight):
+    def coupling(self, source_o, target_y, weight):
         """How to couple the output of one subsystem to the input of another.
 
         This is a fallback default coupling function that should usually be
@@ -1121,8 +1124,9 @@ class NetworkModel(Model):
         subsystem.
 
         Arguments:
-          suboutput (array of shape (nout,)): The output of a source subsystem.
+          source_o (array of shape (nout,)): The output of a source subsystem.
             Here nout is the number of output variables of each submodel.
+          target_y (array of shape (d,)): State of target subsystem.
           weight (float): the connection strength for this connection.
 
         Returns:
@@ -1150,7 +1154,8 @@ class NetworkModel(Model):
         res = np.empty_like(self.y0)
         for j, m in enumerate(self.submodels):
             slicej = slice(self._si[j], self._si[j+1])
-            res[slicej] = m.f(y[slicej], t) # deterministic part of submodel j
+            target_y = y[slicej]
+            res[slicej] = m.f(target_y, t) # deterministic part of submodel j
             itoy = self._itoy[j]
             # get indices of all source nodes that provide input to node j:
             sources = np.nonzero(self.network[:,j])[0]
@@ -1158,8 +1163,9 @@ class NetworkModel(Model):
                 weight = self.network[i, j]
                 ytoo = self._ytoo[i]
                 suby = y[slice(self._si[i], self._si[i+1])] # source node state
-                suboutput = np.dot(ytoo, suby) # source node output
-                res[slicej] += np.dot(itoy, coupling(suboutput, weight))
+                source_o = np.dot(ytoo, suby) # source node output
+                res[slicej] += np.dot(itoy, 
+                                      coupling(source_o, target_y, weight))
         return res
 
     def G(self, y, t):
