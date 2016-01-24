@@ -33,7 +33,7 @@ coupling_strength = 0.24
 network = (np.ones((N, N)) - np.identity(N)) * coupling_strength / N
 
 model = nsim.NetworkModel(nodes, network)
-sim = nsim.NetworkSim(model, T=60.0)
+sim = nsim.Simulation(model, T=60.0)
 ts = sim.timeseries.mod2pi() # interpret y as a phase variable (mod 2pi)
 ts[:,:,53:58].plot(title='viewing five of the %d oscillators' % N)
 ts.order_param().plot(title='phase synchronization order parameter')

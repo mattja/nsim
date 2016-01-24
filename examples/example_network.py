@@ -22,12 +22,12 @@ network = np.array([[  0,   0.2, 0.6,   0],  # weighted directed graph
                     [  0,   0.2, 0.3,   0]])
 
 model = nsim.NetworkModel(nodes, network)
-sim = nsim.NetworkSim(model, T=60.0)
+sim = nsim.Simulation(model, T=60.0)
 sim.timeseries.plot(title='time series at each node, with network coupling')
 
 
 # try the same simulation without any coupling between them:
 network2 = np.zeros((4, 4))
 model2 = nsim.NetworkModel(nodes, network2)
-sim2 = nsim.NetworkSim(model2, T=60.0)
-sim2.timeseries.plot()
+sim2 = nsim.Simulation(model2, T=60.0)
+sim2.timeseries.plot(title='time series at each node, with no coupling')
