@@ -124,15 +124,16 @@ class JansenRit(StratonovichModel):
         ret[5,0] = self.ke2 * self.He2 * self.p_sdev
         return ret
 
-    def coupling(self, source_o, target_y, weight):
+    def coupling(self, source_y, target_y, weight):
         """How to couple the output of one node to the input of another.
         Args:
-          source_o (array of shape (2,)): output variables of the source node
+          source_y (array of shape (8,)): state of the source node
           target_y (array of shape (8,)): state of the target node
           weight (float): the connection strength
         Returns:
-          input (array of shape (1,)): value to drive the input variable of the
+          input (array of shape (8,)): value to drive each variable of the
             target node.
         """
-        v_pyramidal = source_o[0] - source_o[1] # that is, v[1] - v[2]
-        return np.array([self.He2*self.ke2*weight*self.g1*self.S(v_pyramidal)])
+        v_pyramidal = source_y[1] - source_y[2]
+        return (np.array([0, 0, 0, 0, 0, 1.0, 0, 0]) *
+                (weight*self.g1*self.He2*self.ke2*self.S(v_pyramidal)))

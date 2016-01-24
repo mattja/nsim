@@ -20,8 +20,8 @@ class PhaseOscillator(nsim.ODEModel):
     def f(self, y, t):
         return self.omega
 
-    def coupling(self, source_o, target_y, weight):
-        return weight * np.sin(source_o[0] - target_y[0])
+    def coupling(self, source_y, target_y, weight):
+        return weight * np.sin(source_y - target_y)
 
 
 # now couple together N of those oscillators:

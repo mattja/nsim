@@ -758,9 +758,6 @@ class _DEModel(Model):
     Attributes:
       dimension (integer): Dimension of the state space
 
-    input_vars (list of integers): If i is in this list then y[i] is 
-      considered an input variable
-
     output_vars (list of integers): If i is in this list then y[i] is 
       considered an output variable
 
@@ -772,7 +769,6 @@ class _DEModel(Model):
       by default to integrate systems of this class
     """
     dimension = 1
-    input_vars = range(dimension)
     output_vars = range(dimension)
     y0 = np.zeros(dimension)
     labels = None
@@ -783,9 +779,7 @@ class _DEModel(Model):
         if not hasattr(self, 'dimension'):
             raise Exception('class %s should define a `dimension` attribute ' %
                             self.__class__.__name__)
-        # by default consider all variables to be inputs and outputs
-        if not hasattr(self, 'input_vars'):
-            self.input_vars = range(self.dimension)
+        # by default consider all variables to be outputs
         if not hasattr(self, 'output_vars'):
             self.output_vars = range(self.dimension)
         if not hasattr(self, 'y0'):
@@ -811,9 +805,6 @@ class ODEModel(_DEModel):
     Attributes:
       dimension (integer): Dimension of the state space
 
-      input_vars (list of integers): If i is in this list then y[i] is 
-        considered an input variable
-
       output_vars (list of integers): If i is in this list then y[i] is 
         considered an output variable
 
@@ -828,7 +819,6 @@ class ODEModel(_DEModel):
       f(y, t): right hand side of the ODE system
     """
     dimension = 1
-    input_vars = range(dimension)
     output_vars = range(dimension)
     y0 = np.zeros(dimension)
     labels = None
@@ -853,9 +843,6 @@ class ItoModel(_DEModel):
     Attributes:
       dimension (integer): Dimension of the state space
 
-      input_vars (list of integers): If i is in this list then y[i] is 
-        considered an input variable
-
       output_vars (list of integers): If i is in this list then y[i] is 
         considered an output variable
 
@@ -871,7 +858,6 @@ class ItoModel(_DEModel):
       G(y, t): noise coefficient matrix of Ito SDE system 
     """
     dimension = 1
-    input_vars = range(dimension)
     output_vars = range(dimension)
     y0 = np.zeros(dimension)
     labels = None
@@ -899,9 +885,6 @@ class StratonovichModel(_DEModel):
     Attributes:
       dimension (integer): Dimension of the state space
 
-      input_vars (list of integers): If i is in this list then y[i] is 
-        considered an input variable
-
       output_vars (list of integers): If i is in this list then y[i] is 
         considered an output variable
 
@@ -917,7 +900,6 @@ class StratonovichModel(_DEModel):
       G(y, t): noise coefficient matrix of Stratonovich SDE system 
     """
     dimension = 1
-    input_vars = range(dimension)
     output_vars = range(dimension)
     y0 = np.zeros(dimension)
     labels = None
@@ -952,14 +934,10 @@ class DelayItoModel(Model):
 
 class NetworkModel(Model):
     """Model consisting of many coupled instances of a sub-model connected in a
-    network.
+    network. The sub-models do not need to be identical.
 
-    Currently it is assumed that all submodels are similar (in that they have
-    the same number of outputs, the same number of inputs and all coupling
-    connections in the network are the same except for connection strength)
-
-    It is also assumed that inputs from multiple sources to the same target
-    submodel should be summed linearly to get the overall effect.
+    It is assumed that inputs from multiple sources to one target submodel
+    should be summed linearly to get the overall input driving the target.
     For ODE:   dy_i/dt = f_i(y, t)  + \sum_{j=1}^{n}{coupling_ij(y, weight_j)}
 
     For SDE:   dy_i = f_i(y, t)dt + \sum_{j=1}^{n}{coupling_ij(y, weight_j)}
@@ -973,8 +951,6 @@ class NetworkModel(Model):
       output: resulting timeseries: only output variables of output nodes.
       output_nodes (optional list of int): which nodes of the network should be
         used to define the output of the overall network (default: all nodes)
-      input_nodes (list of int): which nodes of the network should receive 
-        input from outside this network (default: all nodes)
     """
     def __init__(self, submodels, network, coupling_function=None,
                  independent_noise=True):
@@ -982,26 +958,26 @@ class NetworkModel(Model):
 
         Arguments:
           submodels (sequence of Model): n subsystems comprising the nodes of
-            the network. The submodels do not have to be identical. But it is
-            expected that all submodels have the same number of inputs, and all
-            have the same number of outputs.
+            the network. The submodels do not have to be identical. 
 
           network (array of shape (n, n)): Adjacency matrix defining the
             network edges as a weighted, directed graph. If network[i, j] is
             nonzero, this means subsystem i provides input to subsystem j with
             connection strength (weight) given by the value of network[i, j].
 
-          coupling_function (callable): Function `coupling(source_o, target_y,
-            weight)` How the outputs of one subsystem should be coupled to the
-            inputs of another. If `None`, the default is to look for a coupling
-            function defined by models being coupled: submodels[0].coupling()
+          coupling_function (callable): Function `coupling(source_y, target_y,
+            weight)` How the output of a source subsystem should be coupled to
+            drive the variables of a target subsystem. If `None`, the default
+            is to look for a coupling function defined by models being coupled:
+            `submodels[0].coupling()`
 
-            If `None` and the submodel also does not define any coupling
-            function, then the fallback is to take the mean of all outputs of
-            the source subsystem and send that value to all inputs of the
-            target subsystem. That is probably not what you want, so supply a
-            function here. When providing a coupling function, it should have
-            the same signature as NetworkModel.coupling()
+            If `None` and the submodel does not define any coupling function,
+            then the fallback is to take the mean of all variables of the
+            source subsystem and use that value weighted by the connection
+            strength to drive all variables of the target subsystem. That is
+            probably not what you want, so supply a function here. When
+            defining a coupling function it should have the same signature
+            as NetworkModel.coupling()
 
           independent_noise (optional bool): This option is only used for
             stochastic systems. If True, the noise processes driving each
@@ -1017,19 +993,10 @@ class NetworkModel(Model):
         self.dimension = 0
         self._sublengths = [] # dimension of the state space of each submodel
         self._si = [0] # starting indices for each submodel, and one beyond end
-        self.subninputs = len(self.submodels[0].input_vars)
-        self.subnoutputs = len(self.submodels[0].output_vars)
         for m in self.submodels:
             self.dimension += m.dimension
             self._sublengths.append(m.dimension)
             self._si.append(self.dimension)
-            if len(m.input_vars) != self.subninputs:
-                raise SimValueError(
-                  'submodels must all have same number of input variables')
-            if len(m.output_vars) != self.subnoutputs:
-                raise SimValueError(
-                  'submodels must all have same number of output variables')
-        self.input_nodes = range(self._n)
         self.output_nodes = range(self._n)
         super(NetworkModel, self).__init__()
         # decide whether to treat overall system as ODE, Ito or Stratonovich
@@ -1052,7 +1019,7 @@ class NetworkModel(Model):
                 self.integrator = (sdeint.stratint,)
             else:
                 raise SimValueError(
-                  """currently only subclasses of ODEModel, ItoModel, 
+                  """currently only instances of an ODEModel, ItoModel, 
                   StratonovichModel or NetworkModel are supported as 
                   subsystems of a NetworkModel""")
         if (ItoModel in submodel_classes and 
@@ -1065,20 +1032,8 @@ class NetworkModel(Model):
               'for %d submodels, adjacency matrix should be shape (%d,%d)' % (
               self._n, self._n, self._n))
         self.network = network
-        # For the kth submodel, _ytoo[k] is a projection matrix mapping from
-        # the submodel's state space to its space of output variables.
-        # _itoy[k] is a matrix mapping from the submodel's space of input
-        # variables to the submodel's state space.
-        self._ytoo = []
-        self._itoy = []
-        for m in self.submodels:
-            self._ytoo.append(
-                    np.identity(m.dimension)[np.array(m.output_vars)])
-            self._itoy.append(
-                    np.identity(m.dimension)[np.array(m.input_vars)].T)
         # Validate coupling function
         test_suby0 = self.submodels[0].y0
-        test_subout = np.dot(self._ytoo[0], test_suby0)
         test_weight = 0.5
         if coupling_function is not None:
             self.coupling_function = (coupling_function,)
@@ -1090,17 +1045,17 @@ class NetworkModel(Model):
             warnings.warn('No coupling function defined. Using the default.',
                           RuntimeWarning, 1)
         try:
-            test_res = self.coupling_function[0](test_subout, test_suby0,
+            test_res = self.coupling_function[0](test_suby0, test_suby0,
                                                  test_weight)
         except:
             print('Coupling function failed given arguments %s, %s, %s' % (
-                  test_subout, test_suby0, test_weight))
+                  test_suby0, test_suby0, test_weight))
             raise
-        if not test_res.shape == (self.subninputs,):
+        if not test_res.shape == test_suby0.shape:
             raise SimValueError(
-                """Each submodel expects %d inputs, so the coupling
-                function must return an array of shape (%d,).""" % (
-                self.subninputs, self.subninputs))
+                """Coupling function must return an array with the same shape
+                as the state vector y of the target system: %s""" %
+                test_suby0.shape)
         self.y0 = np.concatenate([m.y0 for m in self.submodels], axis=0)
         self._independent_noise = independent_noise
         self._nsubnoises = []
@@ -1112,28 +1067,26 @@ class NetworkModel(Model):
         else:
             self.nnoises = max(p for p in self._nsubnoises)
 
-    def coupling(self, source_o, target_y, weight):
+    def coupling(self, source_y, target_y, weight):
         """How to couple the output of one subsystem to the input of another.
 
         This is a fallback default coupling function that should usually be
         replaced with your own.
 
-        This example coupling function takes the mean of all outputs of the
-        source subsystem and sends that uniformly to all inputs of the target
-        subsystem.
+        This example coupling function takes the mean of all variables of the
+        source subsystem and uses that value weighted by the connection
+        strength to drive all variables of the target subsystem.
 
         Arguments:
-          source_o (array of shape (nout,)): The output of a source subsystem.
-            Here nout is the number of output variables of each submodel.
+          source_y (array of shape (d,)): State of the source subsystem.
           target_y (array of shape (d,)): State of target subsystem.
           weight (float): the connection strength for this connection.
 
         Returns:
-          subinput (array of shape (nin,)): Values to drive the input variables
-            of the target system. Here nin is the number of inputs expected by
-            each submodel.
+          input (array of shape (d,)): Values to drive each variable of the
+            target system.
         """
-        return weight*np.ones(self.subninputs)*np.mean(suboutput)
+        return np.ones_like(target_y)*np.mean(source_y)*weight
 
     def f(self, y, t):
         """Deterministic term f of the complete network system
@@ -1153,18 +1106,14 @@ class NetworkModel(Model):
         res = np.empty_like(self.y0)
         for j, m in enumerate(self.submodels):
             slicej = slice(self._si[j], self._si[j+1])
-            target_y = y[slicej]
+            target_y = y[slicej] # target node state
             res[slicej] = m.f(target_y, t) # deterministic part of submodel j
-            itoy = self._itoy[j]
             # get indices of all source nodes that provide input to node j:
             sources = np.nonzero(self.network[:,j])[0]
             for i in sources:
                 weight = self.network[i, j]
-                ytoo = self._ytoo[i]
-                suby = y[slice(self._si[i], self._si[i+1])] # source node state
-                source_o = np.dot(ytoo, suby) # source node output
-                res[slicej] += np.dot(itoy, 
-                                      coupling(source_o, target_y, weight))
+                source_y = y[slice(self._si[i], self._si[i+1])] # source state
+                res[slicej] += coupling(source_y, target_y, weight)
         return res
 
     def G(self, y, t):
@@ -1222,18 +1171,6 @@ class NetworkModel(Model):
             return submodel.G(submodel.y0, t0).shape[1]
 
     @property
-    def input_nodes(self):
-        return self._input_nodes
-
-    @input_nodes.setter
-    def input_nodes(self, seq):
-        self._input_nodes = list(seq)
-        self.input_vars = []
-        for k in self._input_nodes:
-            self.input_vars.extend((v + self._si[k]) for
-                                   v in self.submodels[k].input_vars)
-
-    @property
     def output_nodes(self):
         return self._output_nodes
 
@@ -1272,8 +1209,8 @@ class NetworkModel(Model):
                 newfn.__name__ = fn.__name__
                 return newfn
             def make_coupling_fn(fn):
-                def newfn(source_o, target_y, weight):
-                    return np.array([fn(source_o, target_y, weight)])
+                def newfn(source_y, target_y, weight):
+                    return np.array([fn(source_y[0], target_y[0], weight)])
                 newfn.__name__ = fn.__name__
                 return newfn
             if isinstance(m.f(y0_orig, t0), numbers.Number):
@@ -1281,7 +1218,7 @@ class NetworkModel(Model):
             if hasattr(m, 'G') and isinstance(m.G(y0_orig,t0), numbers.Number):
                 m.G = make_matrix_fn(m.G)
             if (hasattr(m, 'coupling') and
-                    isinstance(m.coupling(m.y0[m.output_vars], m.y0, 0.5),
+                    isinstance(m.coupling(y0_orig, y0_orig, 0.5),
                                numbers.Number)):
                 m.coupling = make_coupling_fn(m.coupling)
             return m
