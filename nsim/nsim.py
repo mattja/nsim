@@ -768,34 +768,35 @@ class _DEModel(Model):
     integrator (sequence containing a single function): Which function to use
       by default to integrate systems of this class
     """
-    dimension = 1
-    output_vars = range(dimension)
-    y0 = np.zeros(dimension)
+    y0 = np.array([0.0])
+    output_vars = [0]
     labels = None
     integrator = (None,)
 
     def __init__(self):
         super(_DEModel, self).__init__()
+        # do some validation of attributes
+        if not hasattr(self, 'y0'):
+            raise Exception(
+                    """%s instance should have a `y0` attribute to define the
+                    initial state""" % self.__class__.__name__)
+        y0_length = (1 if isinstance(self.y0, numbers.Number) else
+                     np.asarray(self.y0).shape[0])
         if not hasattr(self, 'dimension'):
-            raise Exception('class %s should define a `dimension` attribute ' %
-                            self.__class__.__name__)
+            self.dimension = y0_length
+        if self.dimension != y0_length:
+            raise Exception(
+                    """For a system of dimension %d, initial state y0 should
+                    have length %d.""" % (self.dimension, self.dimension))
         # by default consider all variables to be outputs
         if not hasattr(self, 'output_vars'):
             self.output_vars = range(self.dimension)
-        if not hasattr(self, 'y0'):
-            self.output_vars = np.zeros(self.dimension)
-        y0_length = (1 if isinstance(self.y0, numbers.Number) else
-                     np.asarray(self.y0).shape[0])
-        if y0_length != self.dimension:
-            raise Exception(
-              """For a system of dimension %d, initial state y0 should have 
-              length %d.""" % (self.dimension, self.dimension))
         if (self.labels is not None and
                 len(self.labels) != self.dimension):
             raise Excpetion(
-              """System has dimension %d. If labels are provided to name the 
-              dynamical variables, there should be %d labels but got %d.""" % (
-              self.dimension, self.dimension, len(self.labels)))
+                    """System has dimension %d. If labels are provided to name
+                    the dynamical variables there should be %d labels but got
+                    %d.""" %(self.dimension, self.dimension, len(self.labels)))
 
 
 class ODEModel(_DEModel):
@@ -818,9 +819,8 @@ class ODEModel(_DEModel):
     Methods:
       f(y, t): right hand side of the ODE system
     """
-    dimension = 1
-    output_vars = range(dimension)
-    y0 = np.zeros(dimension)
+    y0 = np.array([0.0])
+    output_vars = [0]
     labels = None
     integrator = (integrate.odeint,)
 
@@ -857,9 +857,8 @@ class ItoModel(_DEModel):
       f(y, t): deterministic part of Ito SDE system 
       G(y, t): noise coefficient matrix of Ito SDE system 
     """
-    dimension = 1
-    output_vars = range(dimension)
-    y0 = np.zeros(dimension)
+    y0 = np.array([0.0])
+    output_vars = [0]
     labels = None
     integrator = (sdeint.itoint,)
 
@@ -899,9 +898,8 @@ class StratonovichModel(_DEModel):
       f(y, t): deterministic part of Stratonovich SDE system 
       G(y, t): noise coefficient matrix of Stratonovich SDE system 
     """
-    dimension = 1
-    output_vars = range(dimension)
-    y0 = np.zeros(dimension)
+    y0 = np.array([0.0])
+    output_vars = [0]
     labels = None
     integrator = (sdeint.stratint,)
 
