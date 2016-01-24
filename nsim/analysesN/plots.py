@@ -34,7 +34,7 @@ def plot(dts, title=None, points=None, show=True):
     return ts.plot(title, show)
 
 
-def phase_histogram(dts, times, nbins=30, colormap=mpl.cm.Blues):
+def phase_histogram(dts, times=None, nbins=30, colormap=mpl.cm.Blues):
     """Plot a polar histogram of a phase variable's probability distribution
     Args:
       dts: DistTimeseries with axis 2 ranging over separate instances of an
@@ -44,7 +44,9 @@ def phase_histogram(dts, times, nbins=30, colormap=mpl.cm.Blues):
       nbins (int): number of histogram bins
       colormap
     """
-    if isinstance(times, numbers.Number):
+    if times is None:
+        times = np.linspace(dts.tspan[0], dts.tspan[-1], num=4)
+    elif isinstance(times, numbers.Number):
         times = np.array([times], dtype=np.float64)
     indices = distob.gather(dts.tspan.searchsorted(times))
     if indices[-1] == len(dts.tspan):
