@@ -1750,7 +1750,19 @@ class RepeatedSim(DistSim):
         if identical is True:
             systems = [copy.deepcopy(model) for i in range(repeat)]
         else:
-            systems = [self.modelclass() for i in range(repeat)]
+            if isinstance(model, NetworkModel):
+                network = model.network
+                coupling = model.coupling_function[0]
+                independent_noise = model._independent_noise
+                systems = []
+                for i in range(repeat):
+                    # generate new, non-identical instances of each sub-model
+                    submodels = [type(m)() for m in model.submodels]
+                    networkmodel = self.modelclass(submodels, network,
+                                                   coupling, independent_noise)
+                    systems.append(networkmodel)
+            else:
+                systems = [self.modelclass() for i in range(repeat)]
         super(RepeatedSim, self).__init__(systems, T, dt, integrator)
 
     def _node_labels(self):
