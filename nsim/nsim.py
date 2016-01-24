@@ -1272,10 +1272,19 @@ class NetworkModel(Model):
                     return np.array([[fn(y[0], t)]], dtype=numtype)
                 newfn.__name__ = fn.__name__
                 return newfn
+            def make_coupling_fn(fn):
+                def newfn(source_o, target_y, weight):
+                    return np.array([fn(source_o, target_y, weight)])
+                newfn.__name__ = fn.__name__
+                return newfn
             if isinstance(m.f(y0_orig, t0), numbers.Number):
                 m.f = make_vector_fn(m.f)
             if hasattr(m, 'G') and isinstance(m.G(y0_orig,t0), numbers.Number):
                 m.G = make_matrix_fn(m.G)
+            if (hasattr(m, 'coupling') and
+                    isinstance(m.coupling(m.y0[m.output_vars], m.y0, 0.5),
+                               numbers.Number)):
+                m.coupling = make_coupling_fn(m.coupling)
             return m
 
 
