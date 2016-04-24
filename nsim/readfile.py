@@ -1,4 +1,4 @@
-# Copyright 2014 Matthew J. Aburn
+# Copyright 2016 Matthew J. Aburn
 # 
 # This program is free software: you can redistribute it and/or modify 
 # it under the terms of the GNU General Public License as published by 
@@ -7,8 +7,9 @@
 
 """
 functions:
-  `timeseries_from_mat()` load a multi-channel Timeseries from a MATLAB .mat file
-  `timeseries_from_file()` load a multi-channel Timeseries from many file types
+  `timeseries_from_mat()` load a Timeseries from a MATLAB .mat file
+  `timeseries_from_file()` load a Timeseries from many file types
+  `save_mat()`  save a Timeseries to a MATLAB .mat file
 """
 
 from __future__ import absolute_import
@@ -39,6 +40,22 @@ def timeseries_from_mat(filename, varname=None, fs=1.0):
         mat_dict = sio.loadmat(filename, variable_names=(varname,))
         array = mat_dict.popitem()[1]
     return Timeseries(array, fs=fs)
+
+
+def save_mat(ts, filename):
+    """save a Timeseries to a MATLAB .mat file
+    Args:
+      ts (Timeseries): the timeseries to save
+      filename (str): .mat filename to save to
+    """
+    import scipy.io as sio
+    tspan = ts.tspan
+    fs = (1.0*len(tspan) - 1) / (tspan[-1] - tspan[0])
+    mat_dict = {'data': np.asarray(ts),
+                'fs': fs,
+                'labels': ts.labels[1]}
+    sio.savemat(filename, mat_dict, do_compression=True)
+    return
 
 
 def timeseries_from_file(filename):

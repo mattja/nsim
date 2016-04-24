@@ -746,6 +746,15 @@ class Timeseries(np.ndarray):
             start += step
         return pieces
 
+    def save_mat(self, filename):
+        """save a Timeseries to a MATLAB .mat file
+        Args:
+          ts (Timeseries): the timeseries to save
+          filename (str): .mat filename to save to
+        """
+        from nsim import save_mat
+        return save_mat(self, filename)
+
 
 class _Timeslice(object):
     """Implements the `t` attribute of Timeseries that allows slicing by time
