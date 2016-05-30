@@ -53,7 +53,7 @@ class JansenRit(StratonovichModel):
     ke2 = 1/0.01 # == 100 s^-1
     ke3 = 1/0.01 # == 100 s^-1
     ki = 1/0.02 # ==  50 s^-1
-    g1 = 135.0*2*e0
+    g1 = 135.0
     g2 = 0.80*g1
     g3 = 0.25*g1
     g4 = 0.25*g1
@@ -73,9 +73,8 @@ class JansenRit(StratonovichModel):
     y0 = np.array([12.214, 23.925, 16.841, 3.0534, 13.564, -11.803, -109.62,
                     3.3909])
 
-    # N.B. scaling factor 2*e0 from Jansen1995 is moved to the definition of g1
     def S(self, y):
-        return 1.0/(1.0 + np.exp(-self.rho1 * (y - self.rho2)))
+        return (2.0*self.e0)/(1.0 + np.exp(self.rho1*(self.rho2 - y)))
 
     def f(self, v, t):
         """Aburn2012 equations right hand side, noise free term
