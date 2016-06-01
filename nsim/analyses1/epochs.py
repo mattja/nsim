@@ -1,4 +1,4 @@
-# Copyright 2014 Matthew J. Aburn
+# Copyright 2016 Matthew J. Aburn
 # 
 # This program is free software: you can redistribute it and/or modify 
 # it under the terms of the GNU General Public License as published by 
@@ -110,6 +110,14 @@ def _rescale(ar):
     return 2.0 * (ar - midpoint) / (max - min)
 
 
+def _get_color_list():
+    """Get cycle of colors in a way compatible with all matplotlib versions"""
+    if 'axes.prop_cycle' in plt.rcParams:
+        return [p['color'] for p in list(plt.rcParams['axes.prop_cycle'])]
+    else:
+        return plt.rcParams['axes.color_cycle']
+
+
 def _plot_variability(ts, variability, threshold=None, epochs=None):
     """Plot the timeseries and variability. Optionally plot epochs."""
     import matplotlib as mpl
@@ -146,9 +154,10 @@ def _plot_variability(ts, variability, threshold=None, epochs=None):
         if vmeasures > 1:
             mean_v = np.nanmean(variability[:, i, :], axis=1)
             ax2.plot(ts.tspan, mean_v, color='g')
-            # start colors from 3rd color in the standard cycle
-            _ = [ax2._get_lines.color_cycle.next() for j in range(3)]
-            ax2.plot(ts.tspan, variability[:, i, :], linestyle='dotted')
+            colors = _get_color_list()
+            for j in range(vmeasures):
+                ax2.plot(ts.tspan, variability[:, i, j], linestyle='dotted',
+                         color=colors[(3 + j) % len(colors)])
             if i is 0:
                 ax2.legend(['variability (mean)'] + 
                           ['variability %d' % j for j in range(vmeasures)], 

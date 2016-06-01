@@ -1,4 +1,4 @@
-# Copyright 2014 Matthew J. Aburn
+# Copyright 2016 Matthew J. Aburn
 # 
 # This program is free software: you can redistribute it and/or modify 
 # it under the terms of the GNU General Public License as published by 
@@ -17,6 +17,13 @@ import numpy as np
 import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numbers
+
+def _get_color_list():
+    """Get cycle of colors in a way compatible with all matplotlib versions"""
+    if 'axes.prop_cycle' in plt.rcParams:
+        return [p['color'] for p in list(plt.rcParams['axes.prop_cycle'])]
+    else:
+        return plt.rcParams['axes.color_cycle']
 
 
 def plot(ts, title=None, show=True):
@@ -56,12 +63,11 @@ def plot(ts, title=None, show=True):
         axprops = dict()
         if num_ax > 10:
             axprops['yticks'] = []
+        colors = _get_color_list()
         for i in range(num_ax):
             rect = 0.1, 0.85*(num_ax - i - 1)/num_ax + 0.1, 0.8, 0.85/num_ax
             ax = fig.add_axes(rect, **axprops)
-            # use i'th color in cycle
-            _ = [next(ax._get_lines.color_cycle) for j in range(i)]
-            ax.plot(ts.tspan, ts[...,i])
+            ax.plot(ts.tspan, ts[...,i], color=colors[i % len(colors)])
             plt.setp(ax.get_xticklabels(), visible=False)
             if ts.labels[1] is not None:
                 ax.set_ylabel(ts.labels[1][i], **ylabelprops)
