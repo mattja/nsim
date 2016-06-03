@@ -1,4 +1,4 @@
-# Copyright 2015 Matthew J. Aburn
+# Copyright 2016 Matthew J. Aburn
 # 
 # This program is free software: you can redistribute it and/or modify 
 # it under the terms of the GNU General Public License as published by 
@@ -11,6 +11,7 @@ functions:
 """
 
 import numpy as np
+import distob
 from nsim.timeseries import Timeseries
 
 
@@ -111,17 +112,26 @@ def autocorrelation(ts, normalized=False, unbiased=False):
     Ref: S. J. Orfanidis (1996) "Optimum Signal Processing", 2nd Ed.
     """
     ts = np.squeeze(ts)
-    if normalized:
-        ts = (ts - ts.mean())/ts.std()
-    N = ts.shape[0]
-    ar = np.asarray(ts)
-    acf = np.correlate(ar, ar, mode='full')
-    outlen = (acf.shape[0] + 1) / 2
-    acf = acf[(outlen - 1):]
-    if unbiased:
-        factor = np.array([1.0/(N - m) for m in range(0, outlen)])
-        acf = acf * factor
-    dt = (ts.tspan[-1] - ts.tspan[0]) / (len(ts) - 1.0)
-    lags = np.arange(outlen)*dt
-    # slightly abusing Timeseries class, to hold lags \tau instead of times t
-    return Timeseries(acf, tspan=lags, labels=ts.labels)
+    if ts.ndim <= 1:
+        if normalized:
+            ts = (ts - ts.mean())/ts.std()
+        N = ts.shape[0]
+        ar = np.asarray(ts)
+        acf = np.correlate(ar, ar, mode='full')
+        outlen = (acf.shape[0] + 1) / 2
+        acf = acf[(outlen - 1):]
+        if unbiased:
+            factor = np.array([1.0/(N - m) for m in range(0, outlen)])
+            acf = acf * factor
+        dt = (ts.tspan[-1] - ts.tspan[0]) / (len(ts) - 1.0)
+        lags = np.arange(outlen)*dt
+        return Timeseries(acf, tspan=lags, labels=ts.labels)
+    else:
+        # recursively handle arrays of dimension > 1
+        lastaxis = ts.ndim - 1
+        m = ts.shape[lastaxis]
+        acfs = [ts[...,i].autocorrelation(normalized, unbiased)[...,np.newaxis]
+                for i in range(m)]
+        res = distob.concatenate(acfs, axis=lastaxis)
+        res.labels[lastaxis] = ts.labels[lastaxis]
+        return res
