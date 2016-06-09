@@ -1,4 +1,4 @@
-# Copyright 2014 Matthew J. Aburn
+# Copyright 2016 Matthew J. Aburn
 # 
 # This program is free software: you can redistribute it and/or modify 
 # it under the terms of the GNU General Public License as published by 
@@ -28,13 +28,28 @@ from scipy import signal
 import numpy as np
 
 
-def psd(ts, plot=True):
-    """plot Welch estimate of power spectral density"""
+def psd(ts, nseg=8, plot=True):
+    """plot Welch estimate of power spectral density, using nseg segments with
+    50% overlap and Hamming window."""
     ts = ts.squeeze()
     if ts.ndim is 1:
         ts = ts.reshape((-1, 1))
     fs = (len(ts) - 1.0) / (ts.tspan[-1] - ts.tspan[0])
-    freqs, pxx = signal.welch(ts, fs, detrend='linear', axis=0)
+    nperseg = np.int(len(ts)/(nseg + 1))*2
+    noverlap = nperseg // 2
+    window = signal.hamming(nperseg, sym=False)
+    nfft = max(256, 2**np.int(np.log2(nperseg) + 1))
+    freqs, pxx = signal.welch(ts, fs, window, nperseg, noverlap, nfft,
+                              detrend='linear', axis=0)
+    # Discard estimates for freq bins that are too low for the window size.
+    # (require two full cycles to fit within the window)
+    index = np.nonzero(freqs >= 2.0*fs/nperseg)[0][0]
+    if index > 0:
+        freqs = freqs[index:]
+        pxx = pxx[index:]
+    # Discard estimate for last freq bin as too high for Nyquist frequency:
+    freqs = freqs[:-1]
+    pxx = pxx[:-1]
     if plot is True:
         _plot_psd(ts, freqs, pxx)
     return freqs, pxx
