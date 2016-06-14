@@ -15,8 +15,8 @@ import distob
 from nsim.timeseries import Timeseries
 
 
-def crossing_indices(ts, c=0.0, d=0.0):
-    """For a single variable timeseries, find the time indices each time the
+def crossing_times(ts, c=0.0, d=0.0):
+    """For a single variable timeseries, find the times at which the
     value crosses ``c`` from above or below. Can optionally set a non-zero
     ``d`` to impose the condition that the value must wander at least ``d`` 
     units away from ``c`` between crossings.
@@ -24,6 +24,9 @@ def crossing_indices(ts, c=0.0, d=0.0):
     If the timeseries begins (or ends) exactly at ``c``, then time zero 
     (or the ending time) is also included as a crossing event, 
     so that the boundaries of the first and last excursions are included.
+
+    If the actual crossing time falls between two time steps, linear
+    interpolation is used to estimate the crossing time.
 
     Args:
       ts: Timeseries (single variable)
@@ -33,7 +36,7 @@ def crossing_indices(ts, c=0.0, d=0.0):
       d (float): Optional min distance from c to be attained between crossings.
 
     Returns:
-      array of indices
+      array of float
     """
     #TODO support multivariate time series
     ts = ts.squeeze()
@@ -47,20 +50,25 @@ def crossing_indices(ts, c=0.0, d=0.0):
     tsb = ts[1:]
     # Time indices where phase crosses or reaches zero from below or above
     zc = np.nonzero((tsa < 0) & (tsb >= 0) | (tsa > 0) & (tsb <= 0))[0] + 1
-
-    # Also include index of initial point if we started exactly at zero
+    # Estimate crossing time interpolated linearly within a single time step
+    va = ts[zc-1]
+    vb = ts[zc]
+    ct = (np.abs(vb)*ts.tspan[zc-1] +
+          np.abs(va)*ts.tspan[zc]) / np.abs(vb - va) # denominator always !=0
+    # Also include starting time if we started exactly at zero
     if ts[0] == 0.0:
         zc = np.r_[np.array([0]), zc]
+        ct = np.r_[np.array([ts.tspan[0]]), ct]
 
-    if d == 0.0 or zc.shape[0] is 0:
-        return zc
+    if d == 0.0 or ct.shape[0] is 0:
+        return ct
 
     # Time indices where value crosses c+d or c-d:
     dc = np.nonzero((tsa < d) & (tsb >= d) | (tsa > -d) & (tsb <= -d))[0] + 1
     # Select those zero-crossings separated by at least one d-crossing
     splice = np.searchsorted(dc, zc)
     which_zc = np.r_[np.array([0]), np.nonzero(splice[0:-1] - splice[1:])[0] +1]
-    return zc[which_zc]
+    return ct[which_zc]
 
 
 def first_return_times(ts, c=None, d=0.0):
@@ -84,7 +92,7 @@ def first_return_times(ts, c=None, d=0.0):
     if c is None:
         c = ts.mean()
     if ts.ndim <= 1:
-        return np.diff(ts.tspan[ts.crossing_indices(c, d)])
+        return np.diff(ts.crossing_times(c, d))
     else:
         return np.hstack(
             ts[..., i].first_return_times(c, d) for i in range(ts.shape[-1]))

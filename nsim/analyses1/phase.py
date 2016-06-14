@@ -1,4 +1,4 @@
-# Copyright 2014 Matthew J. Aburn
+# Copyright 2016 Matthew J. Aburn
 # 
 # This program is free software: you can redistribute it and/or modify 
 # it under the terms of the GNU General Public License as published by 
@@ -23,16 +23,19 @@ def mod2pi(ts):
 
 def phase_crossings(ts, phi=0.0):
     """For a single variable timeseries representing the phase of an oscillator,
-    find the time indices each time the phase crosses angle phi,
+    find the times at which the phase crosses angle phi,
     with the condition that the phase must visit phi+pi between crossings.
 
     (Thus if noise causes the phase to wander back and forth across angle phi 
     without the oscillator doing a full revolution, then this is recorded as 
-    a single crossing event, giving the index of the earliest arrival.)
+    a single crossing event, giving the time of the earliest arrival.)
 
     If the timeseries begins (or ends) exactly at phi, then time zero 
     (or the ending time) is also included as a crossing event, 
     so that the boundaries of the first and last oscillations are included.
+
+    If the actual crossing time falls between two time steps, linear
+    interpolation is used to estimate the crossing time.
 
     Arguments:
       ts: Timeseries (single variable)
@@ -41,7 +44,7 @@ def phase_crossings(ts, phi=0.0):
       phi (float): Critical phase angle (radians) at which to report crossings.
 
     Returns:
-      array of indices
+      array of float
     """
     #TODO support multivariate time series
     ts = ts.squeeze()
@@ -58,20 +61,26 @@ def phase_crossings(ts, phi=0.0):
     # Time indices where phase crosses or reaches zero from below or above
     zc = np.nonzero((tsa > -p2) & (tsa < 0) & (tsb >= 0) & (tsb <  p2) | 
                     (tsa <  p2) & (tsa > 0) & (tsb <= 0) & (tsb > -p2))[0] + 1
-    # Also include index of initial point if we started exactly at zero
+    # Estimate crossing time interpolated linearly within a single time step
+    va = ts[zc-1]
+    vb = ts[zc]
+    ct = (np.abs(vb)*ts.tspan[zc-1] +
+          np.abs(va)*ts.tspan[zc]) / np.abs(vb - va) # denominator always !=0
+    # Also include starting time if we started exactly at zero
     if ts[0] == 0.0:
         zc = np.r_[np.array([0]), zc]
+        ct = np.r_[np.array([ts.tspan[0]]), ct]
     # Time indices where phase crosses pi
     pc = np.nonzero((tsa > p2) & (tsb < -p2) | (tsa < -p2) & (tsb > p2))[0] + 1
 
     # Select those zero-crossings separated by at least one pi-crossing
     splice = np.searchsorted(pc, zc)
     which_zc = np.r_[np.array([0]), np.nonzero(splice[0:-1] - splice[1:])[0] +1]
-    if zc.shape[0] is 0:
-        return zc
+    if ct.shape[0] is 0:
+        return ct 
     else:
-        return zc[which_zc]
-    
+        return ct[which_zc]
+
 
 def periods(ts, phi=0.0):
     """For a single variable timeseries representing the phase of an oscillator,
@@ -92,7 +101,7 @@ def periods(ts, phi=0.0):
     """
     ts = np.squeeze(ts)
     if ts.ndim <= 1:
-        return np.diff(ts.tspan[phase_crossings(ts, phi)])
+        return np.diff(phase_crossings(ts, phi))
     else:
         return np.hstack(ts[..., i].periods(phi) for i in range(ts.shape[-1]))
 
