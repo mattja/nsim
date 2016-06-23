@@ -49,8 +49,8 @@ Thanks
 Incorporates extra time series analyses from Forrest Sheng Bao's
 ``pyeeg`` http://fsbao.net
 
-``IPython`` parallel computing, see:
-http://ipython.org/ipython-doc/dev/parallel/
+``ipyparallel`` interactive parallel computing:
+https://ipyparallel.readthedocs.org/
 
 See also:
 ---------
