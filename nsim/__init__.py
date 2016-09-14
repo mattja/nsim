@@ -17,4 +17,4 @@ DistTimeseries.add_analyses(analysesN)
 from . import models
 from .readfile import timeseries_from_mat, timeseries_from_file, save_mat
 
-__version__ = '0.1.16'
+__version__ = '0.1.17-dev'
