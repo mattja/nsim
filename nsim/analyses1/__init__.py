@@ -9,9 +9,10 @@ from .freq import (psd, lowpass, highpass, bandpass, notch, hilbert,
 
 from .epochs import (variability_fp, epochs, epochs_distributed, epochs_joint)
 
-from .pyeeg import (hurst, embed_seq, in_range, bin_power, pfd, hfd, hjorth,
+from .pyeeg import (hurst, embed_seq, bin_power, pfd, hfd, hjorth,
                     spectral_entropy, svd_entropy, fisher_info, ap_entropy,
-                    samp_entropy, dfa)
+                    samp_entropy, dfa, permutation_entropy,
+                    information_based_similarity, LLE)
 
 __all__ = ['psd', 'lowpass', 'highpass', 'bandpass', 'notch', 'hilbert',
            'hilbert_amplitude', 'hilbert_phase', 'cwt', 'cwt_distributed',
@@ -22,4 +23,5 @@ __all__ = ['psd', 'lowpass', 'highpass', 'bandpass', 'notch', 'hilbert',
 __all__ += ['variability_fp', 'epochs', 'epochs_distributed', 'epochs_joint']
 
 __all__ += ['hurst', 'bin_power', 'pfd', 'hfd', 'hjorth', 'spectral_entropy',
-            'svd_entropy', 'fisher_info', 'ap_entropy', 'samp_entropy', 'dfa']
+            'svd_entropy', 'fisher_info', 'ap_entropy', 'samp_entropy', 'dfa',
+            'permutation_entropy', 'information_based_similarity', 'LLE']
