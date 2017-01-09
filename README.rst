@@ -27,7 +27,7 @@ Besides time series from simulations, empirical time series data can also be loa
    | This can be extended with your own analysis functions by calling ``Timeseries.add_analyses()``
    | Analysis of multiple time series is distributed on the cluster, without needing to do any parallel programming.
 
--  For best results use numpy 1.11.0 or later (not yet released!) this enables us to support distributed computation when analysing the resulting time series. You can get a development snapshot of numpy here: https://github.com/numpy/numpy/archive/master.zip
+-  For best results use numpy with the ``__numpy_ufunc__`` feature enabled (not yet released). This enables us to support distributed computation when analysing the resulting time series. You can get numpy with this experimental feature enabled here: https://github.com/mattja/numpy/archive/master.zip
 
 TODO
 ----

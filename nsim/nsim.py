@@ -82,8 +82,8 @@ class RemoteTimeseries(distob.RemoteArray, object):
 
     def __array_prepare__(self, out_arr, context=None):
         """Fetch underlying data to user's computer and apply ufunc locally.
-        Only used as a fallback, for numpy versions < 1.10.0 which lack 
-        support for the __numpy_ufunc__ mechanism. 
+        Only used as a fallback, for current numpy versions which lack 
+        support for the future __numpy_ufunc__ mechanism. 
         """
         #print('RemoteTimeseries __array_prepare__ context=%s' % repr(context))
         out_arr = super(RemoteTimeseries, self).__array_prepare__(
@@ -528,8 +528,8 @@ class DistTimeseries(distob.DistArray):
 
     def __array_prepare__(self, out_arr, context=None):
         """Fetch underlying data to user's computer and apply ufunc locally.
-        Only used as a fallback, for numpy versions < 1.10.0 which lack 
-        support for the __numpy_ufunc__ mechanism. 
+        Only used as a fallback, for current numpy versions which lack 
+        support for the future __numpy_ufunc__ mechanism. 
         """
         #print('DistTimeseries __array_prepare__ context=%s' % repr(context))
         out_arr = super(DistTimeseries, self).__array_prepare__(
