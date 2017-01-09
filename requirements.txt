@@ -1,5 +1,5 @@
-ipyparallel>=4.0
-distob>=0.3.1
+ipyparallel>=4.0,<5.0
+distob>=0.3.2
 sdeint>=0.2.0
 numpy>=1.6
 scipy>=0.9
