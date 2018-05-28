@@ -77,7 +77,7 @@ def timeseries_from_file(filename):
         raise Error("file not found: '%s'" % filename)
     is_edf_bdf = (filename[-4:].lower() in ['.edf', '.bdf'])
     if is_edf_bdf:
-        try: 
+        try:
             import edflib
             return _load_edflib(filename)
         except ImportError:
@@ -124,29 +124,46 @@ def _load_biosig(filename):
 
 def _load_edflib(filename):
     """load a multi-channel Timeseries from an EDF (European Data Format) file
+    or EDF+ file, using edflib.
 
-    Args: 
-      filename: EDF file
+    Args:
+      filename: EDF+ file
 
-    Returns: 
+    Returns:
       Timeseries
     """
     import edflib
-    e = edflib.EDF(filename)
-    if np.ptp(e.signal_nsamples) != 0:
+    e = edflib.EdfReader(filename, annotations_mode='all')
+    if np.ptp(e.get_samples_per_signal()) != 0:
         raise Error('channels have differing numbers of samples')
-    if np.ptp(e.samplefreqs) != 0:
+    if np.ptp(e.get_signal_freqs()) != 0:
         raise Error('channels have differing sample rates')
-    n = max(e.signal_nsamples)
+    n = e.samples_in_file(0)
     m = e.signals_in_file
-    channelnames = e.signal_labels
-    dt = 1.0/e.samplefreqs[0]
-    # edflib requires input buffer of float64s
-    ar = np.zeros((n, m), dtype=np.float64, order='F')
-    for i in range(m):
-        e.edf.readsignal(i, 0, n, ar[:, i])
+    channelnames = e.get_signal_text_labels()
+    dt = 1.0/e.samplefrequency(0)
     # EDF files hold <=16 bits of information for each sample. Representing as
     # double precision (64bit) is unnecessary use of memory. use 32 bit float:
-    ar = ar.astype(np.float32)
+    ar = np.zeros((n, m), dtype=np.float32)
+    # edflib requires input buffer of float64s
+    buf = np.zeros((n,), dtype=np.float64)
+    for i in range(m):
+        e.read_phys_signal(i, 0, n, buf)
+        ar[:,i] = buf
     tspan = np.arange(0, (n - 1 + 0.5) * dt, dt, dtype=np.float32)
     return Timeseries(ar, tspan, labels=[None, channelnames])
+
+
+def annotations_from_file(filename):
+    """Get a list of event annotations from an EDF (European Data Format file
+    or EDF+ file, using edflib.
+
+    Args:
+      filename: EDF+ file
+
+    Returns:
+      list: annotation events, each in the form [start_time, duration, text]
+    """
+    import edflib
+    e = edflib.EdfReader(filename, annotations_mode='all')
+    return e.read_annotations()

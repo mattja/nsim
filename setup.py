@@ -63,6 +63,6 @@ setup(
         'Topic :: Scientific/Engineering :: Physics',
         'Topic :: System :: Distributed Computing',
         ],
-    extras_require={'read_EDF_BDF_files': ['python-edf>=0.4'],
+    extras_require={'read_EDF_BDF_files': ['edflib>=0.7'],
                     'read_all_files': ['python-biosig>=1.3']}
 )
