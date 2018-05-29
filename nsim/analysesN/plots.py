@@ -9,7 +9,9 @@
 Various plotting functions for a distributed timeseries
 """
 import distob
+import matplotlib.style
 import matplotlib as mpl
+mpl.style.use('classic')
 import matplotlib.pyplot as plt
 import numpy as np
 import numbers

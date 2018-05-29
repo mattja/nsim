@@ -54,6 +54,9 @@ def psd(ts, nperseg=1500, noverlap=1200, plot=True):
 
 
 def _plot_psd(ts, freqs, pxx):
+    import matplotlib.style
+    import matplotlib as mpl
+    mpl.style.use('classic')
     import matplotlib.pyplot as plt
     num_subplots = ts.shape[ts.ndim - 1]
     multinode = (ts.ndim > 2 and ts.shape[ts.ndim - 1] > 1)
@@ -271,7 +274,9 @@ def _plot_cwt(ts, coefs, freqs, tsize=1024, fsize=512):
       freqs: list of frequencies (in Hz) corresponding to coefs.
       tsize, fsize: size of the plot (time axis and frequency axis, in pixels)
     """
+    import matplotlib.style
     import matplotlib as mpl
+    mpl.style.use('classic')
     import matplotlib.pyplot as plt
     from scipy import interpolate
     channels = ts.shape[1]

@@ -14,7 +14,9 @@ functions:
 """
 
 import numpy as np
+import matplotlib.style
 import matplotlib as mpl
+mpl.style.use('classic')
 import matplotlib.pyplot as plt
 import numbers
 

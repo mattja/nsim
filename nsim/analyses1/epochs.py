@@ -120,7 +120,9 @@ def _get_color_list():
 
 def _plot_variability(ts, variability, threshold=None, epochs=None):
     """Plot the timeseries and variability. Optionally plot epochs."""
+    import matplotlib.style
     import matplotlib as mpl
+    mpl.style.use('classic')
     import matplotlib.pyplot as plt
     if variability.ndim is 1:
         variability = variability[:, np.newaxis, np.newaxis]
