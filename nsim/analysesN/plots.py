@@ -62,7 +62,7 @@ def phase_histogram(dts, times=None, nbins=30, colormap=mpl.cm.Blues):
         phases = distob.gather(dts.mod2pi()[index, 0, :])
         ax = fig.add_subplot(1, nplots, i + 1, projection='polar')
         n[:,i], bins, patches = ax.hist(phases, nbins, (-np.pi, np.pi), 
-                                        normed=True, histtype='bar')
+                                        density=True, histtype='bar')
         ax.set_title('time = %d s' % time)
         ax.set_xticklabels(['0', r'$\frac{\pi}{4}$', r'$\frac{\pi}{2}$', 
                             r'$\frac{3\pi}{4}$', r'$\pi$', r'$\frac{-3\pi}{4}$',
