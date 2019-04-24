@@ -1229,7 +1229,7 @@ class NetworkModel(Model):
         if np.count_nonzero(np.diff(self._sublengths)) == 0:
             # then all submodels have the same dimension, so can reshape array
             # in place without copying data:
-            subdim = self.dimension / self._n
+            subdim = self.dimension // self._n
             shp = list(ts.shape)
             shp[1] = self._n
             shp.insert(2, subdim)

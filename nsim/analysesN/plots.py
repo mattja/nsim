@@ -56,7 +56,7 @@ def phase_histogram(dts, times=None, nbins=30, colormap=mpl.cm.Blues):
     nplots = len(indices)
     fig = plt.figure()
     n = np.zeros((nbins, nplots))
-    for i in xrange(nplots):
+    for i in range(nplots):
         index = indices[i]
         time = dts.tspan[index]
         phases = distob.gather(dts.mod2pi()[index, 0, :])
@@ -71,7 +71,7 @@ def phase_histogram(dts, times=None, nbins=30, colormap=mpl.cm.Blues):
     #TODO should make a custom colormap instead of reducing color dynamic range:
     norm = mpl.colors.Normalize(1.2*nmin - 0.2*nmax, 
                                 0.6*nmin + 0.4*nmax, clip=True)
-    for i in xrange(nplots):
+    for i in range(nplots):
         ax = fig.get_axes()[i]
         ax.set_ylim(0, nmax)
         for this_n, thispatch in zip(n[:,i], ax.patches):
