@@ -95,7 +95,7 @@ def first_return_times(ts, c=None, d=0.0):
         return np.diff(ts.crossing_times(c, d))
     else:
         return np.hstack(
-            ts[..., i].first_return_times(c, d) for i in range(ts.shape[-1]))
+            [ts[..., i].first_return_times(c, d) for i in range(ts.shape[-1])])
 
 
 def autocorrelation(ts, normalized=False, unbiased=False):

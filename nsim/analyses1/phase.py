@@ -103,7 +103,7 @@ def periods(ts, phi=0.0):
     if ts.ndim <= 1:
         return np.diff(phase_crossings(ts, phi))
     else:
-        return np.hstack(ts[..., i].periods(phi) for i in range(ts.shape[-1]))
+        return np.hstack([ts[...,i].periods(phi) for i in range(ts.shape[-1])])
 
 
 def circmean(ts, axis=2):
