@@ -1,6 +1,6 @@
 nsim
 ====
-| Simulate systems from ODEs or SDEs, analyze timeseries.
+| Simulate systems from ODEs, SDEs or fractional ODEs, analyze timeseries.
 |  N.B. this is a pre-release: still a lot left to be done
 
 Simulation
@@ -10,7 +10,7 @@ nsim is for systems in physics, biology and finance that are modelled in continu
 -  | Automatic parallel computing / cluster computing: For multiple or repeated simulations, nsim distributes these across a cluster or Amazon EC2 cloud (or across the CPUs of one computer) without needing to do any parallel programming.
    | (First configure an `IPython cluster <https://ipyparallel.readthedocs.org/en/latest/process.html#configuring-an-ipython-cluster>`_. e.g. on a single computer can type ``ipcluster start``)
 
--  To define a scalar or vector ODE system, subclass ``ODEModel``. (see `examples <https://github.com/mattja/nsim/tree/master/examples>`_) To define a scalar or vector SDE system, subclass ``ItoModel`` or ``StratonovichModel``. Multiple driving Wiener processes are now supported. Order 1.0 strong stochastic Runge-Kutta algorithms (Rößler2010) are used for SDE integration by default.
+-  To define a scalar or vector ODE system, subclass ``ODEModel``. (see `examples <https://github.com/mattja/nsim/tree/master/examples>`_) To define a scalar or vector SDE system, subclass ``ItoModel`` or ``StratonovichModel``. Multiple driving Wiener processes are now supported. Order 1.0 strong stochastic Runge-Kutta algorithms (Rößler2010) are used for SDE integration by default. To define a scalar or vector Caputo fractional ODE system, subclass ``CaputoModel``.
 
 -  Model parameters can be specified as random distributions, to create multiple non-identical simulations.
 
@@ -55,3 +55,5 @@ https://ipyparallel.readthedocs.org/
 See also:
 ---------
 ``sdeint``: Library of SDE integration algorithms that is used by ``nsim`` to do the simulations. https://github.com/mattja/sdeint
+
+``fodeint``: Library of fractional ODE integration algorithms used by ``nsim``. https://github.com/mattja/fodeint

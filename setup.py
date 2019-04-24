@@ -41,6 +41,7 @@ setup(
     author='Matthew J. Aburn',
     install_requires=['distob>=0.3.3',
                       'sdeint>=0.2.0',
+                      'fodeint>=0.1.0',
                       'numpy>=1.6',
                       'scipy>=0.9',
                       'matplotlib>=1.1'],

@@ -14,6 +14,7 @@ Classes:
 ``ODEModel``   system of ordinary differential equations
 ``ItoModel``   system of Ito stochastic differential equations
 ``StratonovichModel``  system of Stratonovich stochastic differential equations
+``CaputoModel``  system of Caputo fractional ordinary differential equations
 ``NetworkModel``   many coupled instances of a submodel connected in a network
 
 ``Simulation``   single simulation run of a model, with simulation results
@@ -33,6 +34,7 @@ from __future__ import absolute_import
 from .timeseries import Timeseries, _Timeslice
 from . import analysesN
 import sdeint
+import fodeint
 import distob
 from scipy import stats
 from scipy import integrate
@@ -915,6 +917,49 @@ class StratonovichModel(_DEModel):
         pass
 
     def G(self, y, t):
+        pass
+
+
+class CaputoModel(_DEModel):
+    """Model defined by system of Caputo fractional ordinary differential
+    equations   D^a y(t) = f(y,t)
+
+    Attributes:
+      a (float): Exponent of the fractional differential operator.
+        The current version requires 0<a<1.
+
+      dimension (integer): Dimension of the state space
+
+      output_vars (list of integers): If i is in this list then y[i] is 
+        considered an output variable
+
+      y0 (array of shape (dimension,)): Initial state
+
+      labels (sequence of str): optional names for the dynamical variables
+
+      integrator (sequence containing a single function): Which function to use
+        by default to integrate systems of this class.
+
+    Methods:
+      f(y, t): right-hand-side of the Caputo fractional ODE system.
+    """
+    a = 0.2
+    y0 = np.array([0.0])
+    output_vars = [0]
+    labels = None
+    integrator = (fodeint.fodeint,)
+
+    def __init__(self):
+        """Create an instance of this system, ready to simulate"""
+        super(CaputoModel, self).__init__()
+        if not (self.a > 0.0 and self.a < 1.0):
+            raise SimValueError(u'`a` outside range (0,1) not yet supported.')
+
+    def integrate(self, tspan):
+        ar = self.integrator[0](self.a, self.f, self.y0, tspan)
+        return Timeseries(ar, tspan)
+
+    def f(self, y, t):
         pass
 
 
